@@ -1,0 +1,37 @@
+{
+  "name": "Asset Risk & Movement Tracker",
+  "short_name": "Asset Tracker",
+  "description": "Live GPS dual-layer asset risk & movement tracker",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1424",
+  "theme_color": "#0d1424",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%23185fa5'/><circle cx='96' cy='96' r='40' fill='none' stroke='white' stroke-width='12'/><line x1='96' y1='10' x2='96' y2='46' stroke='white' stroke-width='12'/><line x1='96' y1='146' x2='96' y2='182' stroke='white' stroke-width='12'/><line x1='10' y1='96' x2='46' y2='96' stroke='white' stroke-width='12'/><line x1='146' y1='96' x2='182' y2='96' stroke='white' stroke-width='12'/></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%23185fa5'/><circle cx='256' cy='256' r='110' fill='none' stroke='white' stroke-width='32'/><line x1='256' y1='20' x2='256' y2='120' stroke='white' stroke-width='32'/><line x1='256' y1='392' x2='256' y2='492' stroke='white' stroke-width='32'/><line x1='20' y1='256' x2='120' y2='256' stroke='white' stroke-width='32'/><line x1='392' y1='256' x2='492' y2='256' stroke='white' stroke-width='32'/></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "./index.html#dash",
+      "description": "Lihat status semua asset"
+    },
+    {
+      "name": "Live Map",
+      "url": "./index.html#map",
+      "description": "Peta live semua asset"
+    }
+  ]
+}

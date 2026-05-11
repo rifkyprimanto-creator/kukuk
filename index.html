@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Asset Tracker">
+<meta name="theme-color" content="#0d1424">
+<meta name="description" content="Live GPS dual-layer asset risk & movement tracker">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23185fa5'/><circle cx='16' cy='16' r='6' fill='none' stroke='white' stroke-width='2'/><line x1='16' y1='2' x2='16' y2='8' stroke='white' stroke-width='2'/><line x1='16' y1='24' x2='16' y2='30' stroke='white' stroke-width='2'/><line x1='2' y1='16' x2='8' y2='16' stroke='white' stroke-width='2'/><line x1='24' y1='16' x2='30' y2='16' stroke='white' stroke-width='2'/></svg>">
+<title>Asset Risk & Movement Tracker — Live</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg0:#f4f6fa;--bg1:#ffffff;--bg2:#f0f2f7;--bg3:#e4e8f0;
+  --tx1:#0f1117;--tx2:#3d4a5c;--tx3:#7a8699;
+  --br:#dde2ec;--br2:#c5cdd9;
+  --blu:#185fa5;--blu-bg:#e6f1fb;--blu-tx:#0c447c;
+  --grn:#3b6d11;--grn-bg:#eaf3de;--grn-tx:#27500a;
+  --red:#a32d2d;--red-bg:#fcebeb;--red-tx:#791f1f;
+  --amb:#854f0b;--amb-bg:#faeeda;--amb-tx:#633806;
+  --pur:#534ab7;--pur-bg:#eeedfe;--pur-tx:#3c3489;
+  --tel:#0f6e56;--tel-bg:#e1f5ee;--tel-tx:#085041;
+}
+.dark{
+  --bg0:#070b15;--bg1:#0d1424;--bg2:#111c30;--bg3:#1a2540;
+  --tx1:#eef2ff;--tx2:#94a3b8;--tx3:#475569;
+  --br:#1e2d4a;--br2:#2d3f5a;
+  --blu:#378add;--blu-bg:#0c1e35;--blu-tx:#85b7eb;
+  --grn:#639922;--grn-bg:#0a1f07;--grn-tx:#c0dd97;
+  --red:#e24b4a;--red-bg:#1f0808;--red-tx:#f09595;
+  --amb:#ef9f27;--amb-bg:#1e0f00;--amb-tx:#fac775;
+  --pur:#7f77dd;--pur-bg:#1a1840;--pur-tx:#afa9ec;
+  --tel:#1d9e75;--tel-bg:#041e17;--tel-tx:#9fe1cb;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--tx1);font-size:13px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg1);border-bottom:0.5px solid var(--br);flex-wrap:wrap;gap:7px}
+.tbl{display:flex;align-items:center;gap:8px}
+.logo{width:30px;height:30px;border-radius:8px;background:var(--blu);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;flex-shrink:0}
+.appn{font-size:13px;font-weight:500;color:var(--tx1)}.apps{font-size:10px;color:var(--tx3)}
+.tbr{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.pill{display:flex;align-items:center;gap:4px;font-size:10px;background:var(--bg2);border:0.5px solid var(--br);border-radius:20px;padding:3px 9px;color:var(--tx2)}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.d-ok{background:#639922}.d-warn{background:#854f0b}.d-err{background:#a32d2d;animation:blink .7s infinite}
+.tbtn{background:var(--bg2);border:0.5px solid var(--br);border-radius:20px;padding:3px 9px;cursor:pointer;font-size:10px;color:var(--tx2);display:flex;align-items:center;gap:3px}
+/* GPS live pill */
+.gpill{display:flex;align-items:center;gap:4px;font-size:10px;background:var(--grn-bg);border:0.5px solid var(--grn);border-radius:20px;padding:3px 9px;color:var(--grn-tx)}
+.tabs{display:flex;background:var(--bg1);border-bottom:0.5px solid var(--br);padding:0 14px;gap:1px;overflow-x:auto}
+.tab{padding:9px 12px;font-size:11px;font-weight:500;color:var(--tx3);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.tab.on{color:var(--blu);border-bottom-color:var(--blu)}
+.tab:hover:not(.on){color:var(--tx2)}
+.view{display:none;padding:13px;background:var(--bg0)}
+.view.on{display:block}
+.card{background:var(--bg1);border:0.5px solid var(--br);border-radius:10px;padding:12px;margin-bottom:9px}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.pt{font-size:12px;font-weight:500;color:var(--tx2);display:flex;align-items:center;gap:5px}
+.pn{font-size:10px;color:var(--tx3)}
+.lbl{font-size:10px;color:var(--tx3);margin-bottom:3px}
+.inp{width:100%;background:var(--bg2);border:0.5px solid var(--br);border-radius:7px;color:var(--tx1);font-size:11px;padding:7px 9px;margin-bottom:6px}
+.inp::placeholder{color:var(--tx3)}
+.inp:focus{outline:none;border-color:var(--blu)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:9px}
+.g5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin-bottom:9px}
+.mc{background:var(--bg2);border-radius:8px;padding:9px 11px}
+.mc-l{font-size:10px;color:var(--tx3);margin-bottom:2px}
+.mc-v{font-size:19px;font-weight:500;color:var(--tx1)}
+.vg{color:var(--grn)}.vr{color:var(--red)}.vy{color:var(--amb)}.vb{color:var(--blu)}.vp{color:var(--pur)}.vt{color:var(--tel)}
+.bdg{font-size:9px;padding:2px 6px;border-radius:4px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:3px}
+.b-on{background:var(--grn-bg);color:var(--grn-tx)}
+.b-off{background:var(--red-bg);color:var(--red-tx)}
+.b-oob{background:var(--amb-bg);color:var(--amb-tx)}
+.b-hw{background:var(--pur-bg);color:var(--pur-tx)}
+.b-blu{background:var(--blu-bg);color:var(--blu-tx)}
+.b-tel{background:var(--tel-bg);color:var(--tel-tx)}
+.btn{padding:7px 11px;border-radius:7px;font-size:11px;font-weight:500;cursor:pointer;border:0.5px solid var(--br2);background:var(--bg2);color:var(--tx1);display:inline-flex;align-items:center;gap:4px}
+.btn:hover{background:var(--bg3)}
+.bp{background:var(--blu);color:#fff;border-color:var(--blu)}.bp:hover{opacity:.9}
+.bd{background:var(--red-bg);color:var(--red-tx);border-color:var(--red)}
+.bs{background:var(--grn-bg);color:var(--grn-tx);border-color:var(--grn)}
+.bw{background:var(--amb-bg);color:var(--amb-tx);border-color:var(--amb)}
+.bu{background:var(--pur-bg);color:var(--pur-tx);border-color:var(--pur)}
+.bb{width:100%;justify-content:center;margin-bottom:6px}
+.dtbl{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}
+.dtbl th{padding:6px 8px;text-align:left;color:var(--tx3);font-weight:500;border-bottom:0.5px solid var(--br);background:var(--bg2);white-space:nowrap}
+.dtbl td{padding:6px 8px;border-bottom:0.5px solid var(--br);color:var(--tx2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.dtbl tr:hover td{background:var(--bg2)}
+.dtbl tr.roff td{background:var(--red-bg)}
+.dtbl tr.roob td{background:var(--amb-bg)}
+.dtbl tr.rhw td{background:var(--pur-bg)}
+.banner{border-radius:9px;padding:9px 12px;margin-bottom:9px;display:flex;align-items:flex-start;gap:9px;border:0.5px solid}
+.banner.hidden{display:none}
+.ban-err{background:var(--red-bg);border-color:var(--red)}
+.ban-warn{background:var(--amb-bg);border-color:var(--amb)}
+.ban-ok{background:var(--grn-bg);border-color:var(--grn)}
+.ban-ic{width:27px;height:27px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px}
+.bic-e{background:var(--red);color:#fff}.bic-w{background:var(--amb);color:#fff}.bic-ok{background:var(--grn);color:#fff}
+.ban-ttl{font-size:11px;font-weight:500}
+.ban-err .ban-ttl{color:var(--red-tx)}.ban-warn .ban-ttl{color:var(--amb-tx)}.ban-ok .ban-ttl{color:var(--grn-tx)}
+.ban-sub{font-size:10px;margin-top:2px}
+.ban-err .ban-sub{color:var(--red)}.ban-warn .ban-sub{color:var(--amb)}.ban-ok .ban-sub{color:var(--grn)}
+.alog{display:flex;flex-direction:column;gap:3px;max-height:190px;overflow-y:auto}
+.li{padding:6px 8px;border-left:2px solid}
+.li.lt{background:var(--red-bg);border-color:var(--red)}
+.li.lo{background:var(--amb-bg);border-color:var(--amb)}
+.li.lh{background:var(--pur-bg);border-color:var(--pur)}
+.li.ln{background:var(--grn-bg);border-color:var(--grn)}
+.li.li2{background:var(--blu-bg);border-color:var(--blu)}
+.al-m{font-size:11px;color:var(--tx1)}
+.al-s{font-size:9px;color:var(--tx3);margin-top:1px}
+.al-t{font-size:9px;color:var(--tx3)}
+.al-tag{font-size:8px;padding:1px 5px;border-radius:3px;display:inline-block;margin-top:2px}
+.enroll-step{background:var(--bg1);border:0.5px solid var(--br);border-radius:10px;padding:13px;margin-bottom:8px}
+.snum{width:20px;height:20px;border-radius:50%;background:var(--blu);color:#fff;font-size:10px;font-weight:500;display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+.sttl{font-size:12px;font-weight:500;color:var(--tx1);margin-bottom:8px}
+.gprev{background:var(--bg2);border-radius:6px;padding:7px;font-size:10px;font-family:monospace;color:var(--blu);margin:5px 0;display:none;border:0.5px solid var(--br)}
+.enr-item{background:var(--bg2);border-radius:7px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;border:0.5px solid var(--br);margin-bottom:5px}
+.ei-id{font-size:11px;font-family:monospace;color:var(--blu);font-weight:500}
+.ei-info{font-size:9px;color:var(--tx3);margin-top:1px}
+.cring{width:66px;height:66px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 11px;border:2px solid}
+.cr-ok{background:var(--grn-bg);border-color:var(--grn)}
+.cr-oob{background:var(--amb-bg);border-color:var(--amb)}
+.cr-off{background:var(--red-bg);border-color:var(--red)}
+.hbbar{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-bottom:9px}
+.hbfill{height:100%;border-radius:2px;transition:width .5s,background .3s}
+.hbticks{display:flex;gap:3px;justify-content:center;margin-bottom:7px}
+.hbd{width:8px;height:8px;border-radius:50%;background:var(--bg3)}
+.hbd.alive{background:var(--grn)}
+.coordbox{background:var(--bg2);border-radius:7px;padding:8px;font-size:10px;font-family:monospace;color:var(--blu);margin-bottom:9px;border:0.5px solid var(--br)}
+.clbl{font-size:9px;color:var(--tx3);margin-bottom:2px;font-family:'Inter',sans-serif}
+.lc-row{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px}
+.lc{border-radius:9px;padding:10px 12px;border:0.5px solid}
+.lc-sw{background:var(--blu-bg);border-color:var(--blu)}
+.lc-hw{background:var(--pur-bg);border-color:var(--pur)}
+.lc-ttl{font-size:11px;font-weight:500;margin-bottom:5px;display:flex;align-items:center;gap:4px}
+.lc-sw .lc-ttl{color:var(--blu-tx)}.lc-hw .lc-ttl{color:var(--pur-tx)}
+.lc-r{display:flex;justify-content:space-between;align-items:center;margin-bottom:3px}
+.lc-k{font-size:10px;color:var(--tx3)}
+.lc-v{font-size:10px;font-family:monospace;font-weight:500}
+.scen-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-bottom:9px}
+.scen{background:var(--bg1);border:0.5px solid var(--br);border-radius:9px;padding:10px;cursor:pointer}
+.scen:hover{border-color:var(--blu)}
+.scen-ic{font-size:18px;margin-bottom:4px}
+.scen-ttl{font-size:11px;font-weight:500;color:var(--tx1);margin-bottom:2px}
+.scen-desc{font-size:10px;color:var(--tx3);line-height:1.4}
+.sb{padding:7px 8px;border-radius:7px;font-size:10px;cursor:pointer;border:0.5px solid;text-align:center;font-weight:500;display:flex;align-items:center;justify-content:center;gap:3px}
+.sb:hover{opacity:.8}
+.sb-off{background:var(--red-bg);border-color:var(--red);color:var(--red-tx)}
+.sb-oob{background:var(--amb-bg);border-color:var(--amb);color:var(--amb-tx)}
+.sb-on{background:var(--grn-bg);border-color:var(--grn);color:var(--grn-tx)}
+.sb-ret{background:var(--blu-bg);border-color:var(--blu);color:var(--blu-tx)}
+.sb-hoff{background:var(--pur-bg);border-color:var(--pur);color:var(--pur-tx)}
+.sb-hmov{background:var(--amb-bg);border-color:var(--amb);color:var(--amb-tx)}
+.spanel{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:7px}
+.del-box{display:none;background:var(--red-bg);border:0.5px solid var(--red);border-radius:7px;padding:8px;margin-top:5px}
+.del-box.show{display:block}
+.tl-item{display:flex;gap:9px;padding-bottom:13px;position:relative}
+.tl-line{position:absolute;left:4px;top:13px;bottom:0;width:1px;background:var(--br)}
+.tl-ttl{font-size:11px;font-weight:500;color:var(--tx1)}
+.tl-sub{font-size:10px;color:var(--tx3);margin-top:1px}
+.tl-time{font-size:9px;color:var(--tx3);margin-top:2px}
+#map1,#map2{height:250px;border-radius:9px;border:0.5px solid var(--br);overflow:hidden}
+#map1{height:420px}
+.hw-card{background:var(--bg2);border-radius:8px;padding:9px 11px}
+.hw-name{font-size:11px;font-weight:500;color:var(--tx1);margin-bottom:2px}
+.hw-desc{font-size:10px;color:var(--tx3);line-height:1.4}
+.hw-price{font-size:10px;color:var(--blu);font-weight:500;margin-top:3px}
+/* Live GPS status box */
+.gps-live-box{background:var(--bg2);border:0.5px solid var(--br);border-radius:7px;padding:8px 10px;font-size:10px;font-family:monospace;color:var(--blu);margin-bottom:8px}
+.gps-live-label{font-size:9px;color:var(--tx3);font-family:'Inter',sans-serif;margin-bottom:3px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+@keyframes fi{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fi .2s ease}
+.mono{font-family:monospace}
+.empty{font-size:11px;color:var(--tx3);text-align:center;padding:12px}
+
+/* ══════════════════════════════════════
+   BOTTOM NAV — Mobile only
+   ══════════════════════════════════════ */
+.bottom-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--bg1);border-top:0.5px solid var(--br);
+  z-index:1000;
+  padding:0;
+  padding-bottom:env(safe-area-inset-bottom);
+}
+.bnav-inner{
+  display:flex;
+  overflow-x:auto;
+  scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+}
+.bnav-inner::-webkit-scrollbar{display:none}
+.bnav-item{
+  flex:1;min-width:60px;
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:2px;
+  padding:8px 4px 6px;
+  cursor:pointer;
+  font-size:9px;font-weight:500;color:var(--tx3);
+  white-space:nowrap;
+  border-top:2px solid transparent;
+  transition:color .15s;
+}
+.bnav-item i{font-size:18px;line-height:1}
+.bnav-item.on{color:var(--blu);border-top-color:var(--blu)}
+.bnav-item:active{background:var(--bg2)}
+
+/* ══════════════════════════════════════
+   RESPONSIVE — Mobile ≤ 640px
+   ══════════════════════════════════════ */
+@media(max-width:640px){
+  /* Hide desktop tabs, show bottom nav */
+  .tabs{display:none}
+  .bottom-nav{display:block}
+
+  /* Body padding for bottom nav */
+  body{padding-bottom:62px}
+
+  /* Topbar compact */
+  .topbar{padding:8px 12px;gap:5px}
+  .apps{display:none}                        /* hide subtitle on mobile */
+  .appn{font-size:12px}
+  .pill span#stxt{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #clk{display:none}                         /* hide clock on mobile */
+
+  /* View padding */
+  .view{padding:10px 10px}
+
+  /* Cards */
+  .card{padding:10px;border-radius:8px;margin-bottom:8px}
+
+  /* Metric grid: 2×3 on mobile instead of 1×5 */
+  .g5{grid-template-columns:repeat(3,1fr);gap:6px}
+
+  /* Two-col → single col */
+  .g2{grid-template-columns:1fr}
+  .g3{grid-template-columns:1fr 1fr}
+  .lc-row{grid-template-columns:1fr 1fr}
+
+  /* Scenario grid 1 col */
+  .scen-grid{grid-template-columns:1fr}
+
+  /* Table — scrollable, bigger touch target */
+  .dtbl{font-size:11px}
+  .dtbl th,.dtbl td{padding:8px 6px}
+  /* Hide less critical columns on mobile */
+  .dtbl .col-swloc,.dtbl .col-hwloc,.dtbl .col-dev{display:none}
+
+  /* Inputs bigger for finger tap */
+  .inp{font-size:13px;padding:10px 10px;margin-bottom:8px}
+  .btn{padding:10px 13px;font-size:12px}
+  .bb{padding:12px}
+
+  /* Map heights */
+  #map1{height:calc(100vh - 200px);min-height:300px}
+  #map2{height:220px}
+
+  /* Enrollment max-width full */
+  #view-enroll > div,
+  #view-client > div{max-width:100%}
+
+  /* Enroll step */
+  .enroll-step{padding:12px;border-radius:8px}
+  .sttl{font-size:13px}
+
+  /* Sim panel 1 col */
+  .spanel{grid-template-columns:1fr 1fr}
+  .sb{padding:10px 6px;font-size:11px}
+
+  /* Alert log taller on mobile */
+  .alog{max-height:260px}
+
+  /* HW cards 1 col */
+  .g3{grid-template-columns:1fr}
+
+  /* Metric value slightly smaller */
+  .mc-v{font-size:22px}
+  .mc{padding:10px}
+
+  /* GPS pill hidden to save space, info in pill compact */
+  #gps-global-pill{display:none}
+
+  /* Map view — remove bottom padding so map fills */
+  #view-map{padding:0}
+  #view-map .ph{padding:10px 10px 0}
+  #view-map #map-detail{padding:6px 10px;font-size:11px}
+
+  /* Client view ring bigger */
+  .cring{width:72px;height:72px}
+
+  /* Banner compact */
+  .ban-ic{width:24px;height:24px;font-size:11px}
+  .ban-ttl{font-size:12px}
+
+  /* Timeline */
+  #tl-wrap{padding:10px}
+
+  /* Howto g2 single col */
+  #view-howto .g2{grid-template-columns:1fr}
+
+  /* Sim g2 single col */
+  #view-sim .g2{grid-template-columns:1fr}
+
+  /* table action buttons: icon only */
+  .btn-lbl{display:none}
+}
+
+/* ══════════════════════════════════════
+   RESPONSIVE — Tablet 641–900px
+   ══════════════════════════════════════ */
+@media(min-width:641px) and (max-width:900px){
+  .g5{grid-template-columns:repeat(3,1fr)}
+  .scen-grid{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr}
+  #map1{height:360px}
+  .view{padding:12px}
+  /* Keep top tabs but scroll */
+  .tabs{padding:0 8px;gap:0}
+  .tab{padding:8px 10px;font-size:10px}
+}
+
+/* ══════════════════════════════════════
+   DESKTOP ≥ 901px — baseline (unchanged)
+   ══════════════════════════════════════ */
+@media(min-width:901px){
+  .bottom-nav{display:none!important}
+  body{padding-bottom:0}
+}
+</style>
+</head>
+
+<body class="dark">
+<div id="root">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="tbl">
+    <div class="logo"><i class="ti ti-satellite" aria-hidden="true"></i></div>
+    <div>
+      <div class="appn">Asset Risk & Movement Tracker</div>
+      <div class="apps">Live GPS · Supabase Cloud · Dual-layer · Geofence · Anti-theft</div>
+    </div>
+  </div>
+  <div class="tbr">
+    <div class="pill"><div class="dot d-ok" id="sdot"></div><span id="stxt">System nominal</span></div>
+    <div class="gpill" id="gps-global-pill"><i class="ti ti-current-location" style="font-size:9px"></i> <span id="gps-global-txt">GPS...</span></div>
+    <button class="tbtn" onclick="toggleTheme()"><i class="ti ti-moon" id="ticon" aria-hidden="true"></i><span id="tlbl">Dark</span></button>
+    <span style="font-size:10px;color:var(--tx3)" id="clk"></span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab on" id="t-dash" onclick="gotoTab('dash')"><i class="ti ti-layout-dashboard" style="font-size:12px"></i> Dashboard</div>
+  <div class="tab" id="t-map" onclick="gotoTab('map')"><i class="ti ti-map" style="font-size:12px"></i> Live Map</div>
+  <div class="tab" id="t-client" onclick="gotoTab('client')"><i class="ti ti-device-mobile" style="font-size:12px"></i> Client View</div>
+  <div class="tab" id="t-enroll" onclick="gotoTab('enroll')"><i class="ti ti-user-plus" style="font-size:12px"></i> Enrollment</div>
+  <div class="tab" id="t-sim" onclick="gotoTab('sim')"><i class="ti ti-player-play" style="font-size:12px"></i> Simulator</div>
+  <div class="tab" id="t-timeline" onclick="gotoTab('timeline')"><i class="ti ti-timeline" style="font-size:12px"></i> Timeline</div>
+  <div class="tab" id="t-howto" onclick="gotoTab('howto')"><i class="ti ti-info-circle" style="font-size:12px"></i> How it works</div>
+</div>
+
+<!-- ══ DASHBOARD ══ -->
+<div class="view on" id="view-dash">
+  <div id="main-ban" class="banner hidden"></div>
+  <div class="g5">
+    <div class="mc"><div class="mc-l">Total assets</div><div class="mc-v vb" id="m-tot">0</div></div>
+    <div class="mc"><div class="mc-l">SW + HW online</div><div class="mc-v vg" id="m-full">0</div></div>
+    <div class="mc"><div class="mc-l">SW off, HW active</div><div class="mc-v vp" id="m-hwonly">0</div></div>
+    <div class="mc"><div class="mc-l">Both offline</div><div class="mc-v vr" id="m-both">0</div></div>
+    <div class="mc"><div class="mc-l">Out of bounds</div><div class="mc-v vy" id="m-oob">0</div></div>
+  </div>
+  <div class="card" style="overflow-x:auto" id="asset-table-card">
+    <div class="ph">
+      <div class="pt"><i class="ti ti-table" style="font-size:12px"></i> Asset dual-layer status</div>
+      <span class="pn" id="tbl-upd"></span>
+    </div>
+    <table class="dtbl">
+      <thead><tr>
+        <th style="width:100px">Asset ID</th>
+        <th style="width:70px">SW</th>
+        <th style="width:70px">HW tracker</th>
+        <th style="width:75px">Threat</th>
+        <th class="col-swloc" style="width:100px">SW location</th>
+        <th class="col-hwloc" style="width:100px">HW location</th>
+        <th class="col-dev" style="width:60px">HW bat</th>
+        <th style="width:65px">Deviasi</th>
+        <th style="width:115px">Aksi</th>
+      </tr></thead>
+      <tbody id="main-tbody"></tbody>
+    </table>
+  </div>
+  <!-- Mobile asset cards (shown only on mobile via JS) -->
+  <div id="mobile-asset-cards"></div>
+  <div class="g2">
+    <div class="card">
+      <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-bell" style="font-size:12px"></i> Alert log</div><span class="pn" id="log-ct">0</span></div>
+      <div class="alog" id="alog"><div class="empty">No alerts yet</div></div>
+    </div>
+    <div class="card">
+      <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-info-circle" style="font-size:12px"></i> Layer guide</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="background:var(--blu-bg);border:0.5px solid var(--blu);border-radius:7px;padding:8px"><div style="font-size:11px;font-weight:500;color:var(--blu-tx);margin-bottom:3px;display:flex;align-items:center;gap:4px"><i class="ti ti-device-mobile"></i> Layer 1 — Software agent</div><div style="font-size:10px;color:var(--tx3)">App di device. Kirim GPS via internet ke Supabase. Mati jika device dimatikan.</div></div>
+        <div style="background:var(--pur-bg);border:0.5px solid var(--pur);border-radius:7px;padding:8px"><div style="font-size:11px;font-weight:500;color:var(--pur-tx);margin-bottom:3px;display:flex;align-items:center;gap:4px"><i class="ti ti-cpu"></i> Layer 2 — Hardware tracker</div><div style="font-size:10px;color:var(--tx3)">Teltonika/Concox tersembunyi. SIM & baterai independen. Tetap aktif meski SW mati.</div></div>
+        <div style="background:var(--red-bg);border:0.5px solid var(--red);border-radius:7px;padding:8px"><div style="font-size:11px;font-weight:500;color:var(--red-tx);margin-bottom:3px;display:flex;align-items:center;gap:4px"><i class="ti ti-shield-off"></i> SW off + HW aktif = possible theft</div><div style="font-size:10px;color:var(--tx3)">HW masih melacak pergerakan pencuri meski device utama sudah dimatikan.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAP ══ -->
+<div class="view" id="view-map">
+  <div class="ph" style="margin-bottom:7px">
+    <div class="pt"><i class="ti ti-map-pin" style="font-size:12px"></i> Live map — semua asset</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span style="font-size:10px;color:var(--blu-tx);background:var(--blu-bg);padding:2px 7px;border-radius:4px;border:0.5px solid var(--blu)"><i class="ti ti-circle" style="font-size:9px"></i> SW</span>
+      <span style="font-size:10px;color:var(--pur-tx);background:var(--pur-bg);padding:2px 7px;border-radius:4px;border:0.5px solid var(--pur)"><i class="ti ti-cpu" style="font-size:9px"></i> HW</span>
+      <select class="inp" id="map-sel" style="width:130px;margin-bottom:0;font-size:10px" onchange="refreshMap()"><option value="all">Semua asset</option></select>
+    </div>
+  </div>
+  <div id="map1" style="margin-bottom:9px"></div>
+  <div id="map-detail" style="font-size:11px;color:var(--tx3);text-align:center;padding:5px">Klik marker untuk detail</div>
+</div>
+
+<!-- ══ CLIENT VIEW ══ -->
+<div class="view" id="view-client">
+  <div style="max-width:380px;margin:0 auto">
+    <div class="lbl" style="margin-bottom:4px">Pilih device</div>
+    <select class="inp" id="client-sel" onchange="onClientSel()"></select>
+    <div class="card">
+      <div class="cring cr-ok" id="c-ring"><i class="ti ti-shield-check" id="c-icon" style="font-size:22px;color:var(--grn)"></i></div>
+      <div style="text-align:center;font-size:13px;font-weight:500;margin-bottom:2px" id="c-stxt">Monitoring active</div>
+      <div style="text-align:center;font-size:11px;color:var(--tx3);margin-bottom:11px" id="c-sub">Aset dalam zona aman</div>
+      <div class="lbl" style="text-align:center">Heartbeat</div>
+      <div class="hbticks" id="c-ticks"></div>
+      <div class="hbbar"><div class="hbfill" id="c-hbf" style="width:100%;background:var(--grn)"></div></div>
+      <div class="coordbox">
+        <div class="clbl">Registered home</div><div id="c-reg">—</div>
+        <div class="clbl" style="margin-top:4px">SW location (live GPS)</div><div id="c-sw">—</div>
+        <div class="clbl" style="margin-top:4px">HW tracker location</div><div id="c-hw" style="color:var(--pur-tx)">—</div>
+        <div class="clbl" style="margin-top:4px">Deviasi dari home</div><div id="c-dist" style="font-weight:500">—</div>
+        <div class="clbl" style="margin-top:4px">Last seen (Supabase)</div><div id="c-lastseen" style="color:var(--tx3)">—</div>
+      </div>
+      <div class="lbl">Live map</div>
+      <div id="map2" style="margin-top:5px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ENROLLMENT ══ -->
+<div class="view" id="view-enroll">
+  <div style="max-width:480px;margin:0 auto">
+    <!-- Live GPS status -->
+    <div class="gps-live-box">
+      <div class="gps-live-label">📡 GPS Device Saat Ini (Browser Geolocation)</div>
+      <span id="enr-gps-lat">0.000000</span>, <span id="enr-gps-lng">0.000000</span>
+      <span style="margin-left:8px;font-size:9px;color:var(--tx3)" id="enr-gps-acc"></span>
+    </div>
+    <div class="enroll-step">
+      <div class="snum">1</div>
+      <div class="sttl">Daftarkan device ID</div>
+      <div class="lbl">Device ID</div><input class="inp" id="e-id" placeholder="SEUIC-XXX atau HP-SAYA">
+      <div class="lbl">Nama / label aset</div><input class="inp" id="e-name" placeholder="Forklift Alpha, Survey Drone, dll">
+      <div class="lbl">Koordinator</div><input class="inp" id="e-coord" placeholder="Nama penanggung jawab">
+    </div>
+    <div class="enroll-step">
+      <div class="snum">2</div>
+      <div class="sttl">Set home base location</div>
+      <button class="btn bp bb" onclick="captureGPS()"><i class="ti ti-current-location"></i> Set current location as home base</button>
+      <div class="gprev" id="gps-prev"></div>
+      <div class="lbl" style="margin-top:4px">Atau input manual</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <input class="inp" id="e-lat" placeholder="Latitude" style="margin-bottom:0">
+        <input class="inp" id="e-lng" placeholder="Longitude" style="margin-bottom:0">
+      </div>
+    </div>
+    <div class="enroll-step">
+      <div class="snum">3</div>
+      <div class="sttl">Set HW tracker info (opsional)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><div class="lbl">Model HW tracker</div><select class="inp" id="e-hw"><option value="Teltonika FMB920">Teltonika FMB920</option><option value="Concox GT06N">Concox GT06N</option><option value="Apple AirTag">Apple AirTag</option><option value="Custom">Custom</option></select></div>
+        <div><div class="lbl">Baterai awal (%)</div><input class="inp" id="e-bat" type="number" min="1" max="100" value="100" placeholder="100"></div>
+      </div>
+    </div>
+    <div class="enroll-step">
+      <div class="snum">4</div>
+      <div class="sttl">Konfirmasi & daftarkan</div>
+      <button class="btn bs bb" onclick="enrollDevice()"><i class="ti ti-check"></i> Daftarkan ke sistem & simpan ke Supabase</button>
+      <div id="e-msg" style="font-size:11px;margin-top:5px;display:none"></div>
+    </div>
+    <div class="card">
+      <div class="ph" style="margin-bottom:8px"><div class="pt"><i class="ti ti-list-check" style="font-size:12px"></i> Enrolled devices</div><span class="pn" id="e-cnt">0</span></div>
+      <div id="enr-list"><div class="empty">Belum ada device</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SIMULATOR ══ -->
+<div class="view" id="view-sim">
+  <div style="background:var(--amb-bg);border:0.5px solid var(--amb);border-radius:9px;padding:9px 12px;margin-bottom:9px;font-size:10px;color:var(--amb-tx)">
+    <i class="ti ti-alert-triangle" style="font-size:12px"></i> <strong>Simulator mode</strong> — perubahan di sini bersifat lokal (tidak menulis ke Supabase). Data live dari cloud tetap berjalan.
+  </div>
+  <div class="scen-grid">
+    <div class="scen" onclick="runScenario('stolen')">
+      <div class="scen-ic"><i class="ti ti-device-mobile-off" style="font-size:18px;color:var(--red)"></i></div>
+      <div class="scen-ttl">Device dicuri + dimatikan</div>
+      <div class="scen-desc">SW mati, HW tracker masih melacak pergerakan pencuri secara real-time</div>
+    </div>
+    <div class="scen" onclick="runScenario('findmy')">
+      <div class="scen-ic"><i class="ti ti-map-search" style="font-size:18px;color:var(--pur)"></i></div>
+      <div class="scen-ttl">Find My simulation</div>
+      <div class="scen-desc">SW offline, HW beacon kirim koordinat — mirip Apple Find My / Life360</div>
+    </div>
+    <div class="scen" onclick="runScenario('both_lost')">
+      <div class="scen-ic"><i class="ti ti-alert-triangle" style="font-size:18px;color:var(--amb)"></i></div>
+      <div class="scen-ttl">Keduanya hilang</div>
+      <div class="scen-desc">SW + HW mati. Last known location dari kedua layer ditampilkan</div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-settings" style="font-size:12px"></i> Manual controls</div></div>
+      <div class="lbl">Target asset</div>
+      <select class="inp" id="sim-sel" onchange="onSimChange()"></select>
+      <div class="lbl" style="font-weight:500;color:var(--blu-tx);margin-bottom:4px"><i class="ti ti-device-mobile"></i> Software layer</div>
+      <div class="spanel">
+        <div class="sb sb-off" onclick="simSW('kill')"><i class="ti ti-power"></i> Matikan SW</div>
+        <div class="sb sb-oob" onclick="simSW('oob')"><i class="ti ti-arrow-bar-right"></i> SW keluar zona</div>
+        <div class="sb sb-on" onclick="simSW('wake')"><i class="ti ti-refresh"></i> Hidupkan SW</div>
+        <div class="sb sb-ret" onclick="simSW('home')"><i class="ti ti-home"></i> SW ke home</div>
+      </div>
+      <div class="lbl" style="font-weight:500;color:var(--pur-tx);margin-bottom:4px;margin-top:4px"><i class="ti ti-cpu"></i> Hardware tracker layer</div>
+      <div class="spanel">
+        <div class="sb sb-hoff" onclick="simHW('kill')"><i class="ti ti-battery-off"></i> HW baterai habis</div>
+        <div class="sb sb-hmov" onclick="simHW('move')"><i class="ti ti-run"></i> HW bergerak jauh</div>
+        <div class="sb sb-on" onclick="simHW('wake')"><i class="ti ti-battery-charging"></i> HW aktif kembali</div>
+        <div class="sb sb-ret" onclick="simHW('home')"><i class="ti ti-home"></i> HW ke home</div>
+      </div>
+      <div class="lbl" style="margin-top:6px">Heartbeat timeout SW</div>
+      <div style="display:flex;align-items:center;gap:7px">
+        <input type="range" min="5" max="60" step="5" value="15" id="hb-slider" style="flex:1" oninput="HB_TO=+this.value;document.getElementById('hb-val').textContent=this.value+'s'">
+        <span style="font-size:11px;color:var(--blu);font-weight:500;min-width:28px" id="hb-val">15s</span>
+      </div>
+      <div id="del-box" class="del-box">
+        <div style="font-size:11px;color:var(--red-tx);margin-bottom:6px">Hapus asset dari sistem?</div>
+        <div style="display:flex;gap:5px">
+          <button class="btn bd" style="flex:1;justify-content:center;padding:6px" onclick="confirmDel()"><i class="ti ti-trash"></i> Hapus</button>
+          <button class="btn" style="flex:1;justify-content:center;padding:6px" onclick="cancelDel()">Batal</button>
+        </div>
+      </div>
+      <div class="sb sb-off" onclick="askDel()" style="margin-top:6px"><i class="ti ti-trash"></i> Hapus asset ini</div>
+    </div>
+    <div class="card">
+      <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-eye" style="font-size:12px"></i> Asset detail</div></div>
+      <div id="sim-detail"><div class="empty">Pilih asset dari dropdown</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TIMELINE ══ -->
+<div class="view" id="view-timeline">
+  <div class="ph" style="margin-bottom:7px">
+    <div class="pt"><i class="ti ti-timeline" style="font-size:12px"></i> Event timeline</div>
+    <select class="inp" id="tl-sel" style="width:140px;margin-bottom:0;font-size:10px" onchange="renderTimeline()"><option value="all">Semua asset</option></select>
+  </div>
+  <div class="card" id="tl-wrap"><div class="empty">Belum ada event</div></div>
+</div>
+
+<!-- ══ HOW IT WORKS ══ -->
+<div class="view" id="view-howto">
+  <div class="g2" style="margin-bottom:9px">
+    <div class="card">
+      <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-device-mobile" style="font-size:12px"></i> Layer 1 — Software agent (Live GPS)</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:7px"><div style="width:20px;height:20px;border-radius:50%;background:var(--blu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;flex-shrink:0">1</div><div><div style="font-size:11px;font-weight:500;color:var(--tx1)">Browser Geolocation API</div><div style="font-size:10px;color:var(--tx3)">watchPosition() otomatis kirim GPS HP ke Supabase tiap ada perubahan posisi</div></div></div>
+        <div style="display:flex;gap:7px"><div style="width:20px;height:20px;border-radius:50%;background:var(--blu);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;flex-shrink:0">2</div><div><div style="font-size:11px;font-weight:500;color:var(--tx1)">Heartbeat monitor</div><div style="font-size:10px;color:var(--tx3)">Timeout >15s → trigger alert SW offline. Poll Supabase tiap 5 detik untuk data live</div></div></div>
+        <div style="display:flex;gap:7px"><div style="width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;flex-shrink:0">!</div><div><div style="font-size:11px;font-weight:500;color:var(--red-tx)">Kelemahan</div><div style="font-size:10px;color:var(--tx3)">Mati jika device dimatikan, SIM dicabut, atau baterai habis</div></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-cpu" style="font-size:12px"></i> Layer 2 — Hardware tracker</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;gap:7px"><div style="width:20px;height:20px;border-radius:50%;background:var(--pur);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;flex-shrink:0">1</div><div><div style="font-size:11px;font-weight:500;color:var(--tx1)">Hardware independen</div><div style="font-size:10px;color:var(--tx3)">Tersembunyi di bodi aset. SIM & baterai sendiri — tidak bergantung SW</div></div></div>
+        <div style="display:flex;gap:7px"><div style="width:20px;height:20px;border-radius:50%;background:var(--pur);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;flex-shrink:0">2</div><div><div style="font-size:11px;font-weight:500;color:var(--tx1)">Kirim via GPRS/LTE mandiri</div><div style="font-size:10px;color:var(--tx3)">Tetap tracking meski SEUIC/laptop dimatikan pencuri</div></div></div>
+        <div style="display:flex;gap:7px"><div style="width:20px;height:20px;border-radius:50%;background:var(--pur);color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;flex-shrink:0">3</div><div><div style="font-size:11px;font-weight:500;color:var(--tx1)">Baterai 500–5000 mAh</div><div style="font-size:10px;color:var(--tx3)">1–60 hari standby tergantung model. Ideal disembunyikan di slot baterai</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:9px">
+    <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-git-merge" style="font-size:12px"></i> Decision matrix</div></div>
+    <table class="dtbl">
+      <thead><tr><th style="width:90px">SW status</th><th style="width:90px">HW status</th><th style="width:110px">Interpretasi</th><th>Respons dashboard</th></tr></thead>
+      <tbody>
+        <tr><td><span class="bdg b-on">Online</span></td><td><span class="bdg b-hw">Active</span></td><td><span class="bdg b-tel">Normal</span></td><td style="font-size:10px;color:var(--tx2)">Tampilkan SW location (lebih akurat). HW sebagai backup konfirmasi</td></tr>
+        <tr class="roff"><td><span class="bdg b-off">Offline</span></td><td><span class="bdg b-hw">Active</span></td><td><span class="bdg b-off">Possible theft</span></td><td style="font-size:10px;color:var(--tx2)">ALERT MERAH. Tampilkan HW location real-time. Log last SW coords</td></tr>
+        <tr class="roob"><td><span class="bdg b-on">Online</span></td><td><span class="bdg b-hw">Active</span></td><td><span class="bdg b-oob">OOB</span></td><td style="font-size:10px;color:var(--tx2)">ALERT KUNING. Bandingkan SW vs HW — konfirmasi pergerakan nyata</td></tr>
+        <tr class="roff"><td><span class="bdg b-off">Offline</span></td><td><span class="bdg b-off">Offline</span></td><td><span class="bdg b-off">Both lost</span></td><td style="font-size:10px;color:var(--tx2)">ALERT KRITIS. Last known kedua layer + timestamp ditampilkan</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="ph" style="margin-bottom:7px"><div class="pt"><i class="ti ti-device-floppy" style="font-size:12px"></i> Recommended hardware</div></div>
+    <div class="g3">
+      <div class="hw-card"><div class="hw-name">Teltonika FMB920</div><div class="hw-desc">GPS+GLONASS, 4G LTE, baterai internal 170mAh, IP41. Ideal untuk kendaraan & aset industri.</div><div class="hw-price">~Rp 900.000</div></div>
+      <div class="hw-card"><div class="hw-name">Concox GT06N</div><div class="hw-desc">GPS 2G, ukuran kecil, baterai 200mAh. Entry-level, mudah didapat di marketplace lokal.</div><div class="hw-price">~Rp 350.000</div></div>
+      <div class="hw-card"><div class="hw-name">Apple AirTag</div><div class="hw-desc">UWB+BLE, manfaatkan jaringan 1B+ iPhone sebagai relay. Baterai CR2032, tahan 1 tahun.</div><div class="hw-price">~Rp 450.000</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BOTTOM NAV (mobile only) ══ -->
+<nav class="bottom-nav">
+  <div class="bnav-inner">
+    <div class="bnav-item on" id="bn-dash" onclick="gotoTab('dash')"><i class="ti ti-layout-dashboard"></i>Dashboard</div>
+    <div class="bnav-item" id="bn-map" onclick="gotoTab('map')"><i class="ti ti-map"></i>Map</div>
+    <div class="bnav-item" id="bn-client" onclick="gotoTab('client')"><i class="ti ti-device-mobile"></i>Client</div>
+    <div class="bnav-item" id="bn-enroll" onclick="gotoTab('enroll')"><i class="ti ti-user-plus"></i>Enroll</div>
+    <div class="bnav-item" id="bn-sim" onclick="gotoTab('sim')"><i class="ti ti-player-play"></i>Sim</div>
+    <div class="bnav-item" id="bn-timeline" onclick="gotoTab('timeline')"><i class="ti ti-timeline"></i>Timeline</div>
+    <div class="bnav-item" id="bn-howto" onclick="gotoTab('howto')"><i class="ti ti-info-circle"></i>Info</div>
+  </div>
+</nav>
+
+</div><!-- end #root -->
+
+<script>
+/* ═══════════════════════════════════════════
+   SUPABASE CONFIG — sama persis dengan versi GPS asli
+   ═══════════════════════════════════════════ */
+const SUPABASE_URL = 'https://uappnmhaqblzittbjmsi.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_DCWTb1BAzQOgO8-sSmlEyg_7dc_jS2X';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ═══════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════ */
+let isDark = true, HB_TO = 15;
+let leafMap1 = null, mapMarkers1 = [];
+let clientMap = null, clientSW = null, clientHW = null, clientGeo = null;
+let evLog = [];
+let currentPos = { lat: 0, lng: 0, acc: 0 };
+
+// assets array — akan diisi dari Supabase + local enroll
+let assets = [];
+
+/* ═══════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════ */
+const HAV = (la1,lo1,la2,lo2) => {
+  const R=6371000,r=x=>x*Math.PI/180,dl=r(la2-la1),dn=r(lo2-lo1);
+  const a=Math.sin(dl/2)**2+Math.cos(r(la1))*Math.cos(r(la2))*Math.sin(dn/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+};
+const fmD = m => m < 1000 ? Math.round(m)+'m' : (m/1000).toFixed(2)+' km';
+const fmC = v => typeof v === 'number' ? v.toFixed(6) : '—';
+const fmT = () => new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+function swSt(a){
+  const age = (Date.now()-a.swLastSeen)/1000;
+  if(a.swStatus==='offline'||age>HB_TO) return 'offline';
+  if(HAV(a.regLat,a.regLng,a.swLat,a.swLng)>100) return 'oob';
+  return 'online';
+}
+function hwSt(a){ return a.hwStatus==='offline' ? 'offline' : 'online'; }
+function threat(a){
+  const sw=swSt(a),hw=hwSt(a);
+  if(sw==='offline'&&hw==='online') return 'theft';
+  if(sw==='offline'&&hw==='offline') return 'lost';
+  if(sw==='oob') return 'oob';
+  return 'safe';
+}
+function pushLog(type,msg,sub){
+  evLog.unshift({type,msg,sub:sub||'',t:fmT()});
+  if(evLog.length>60) evLog.pop();
+}
+
+/* ═══════════════════════════════════════════
+   LIVE GPS — Browser Geolocation (sama dgn versi simpel)
+   ═══════════════════════════════════════════ */
+function startGpsTracking(){
+  if(!navigator.geolocation) return;
+  navigator.geolocation.watchPosition(pos => {
+    currentPos.lat = pos.coords.latitude;
+    currentPos.lng = pos.coords.longitude;
+    currentPos.acc = Math.round(pos.coords.accuracy);
+    // Update pill di topbar
+    document.getElementById('gps-global-txt').textContent =
+      currentPos.lat.toFixed(4)+', '+currentPos.lng.toFixed(4);
+    // Update enroll view display
+    document.getElementById('enr-gps-lat').textContent = currentPos.lat.toFixed(6);
+    document.getElementById('enr-gps-lng').textContent = currentPos.lng.toFixed(6);
+    document.getElementById('enr-gps-acc').textContent = '±'+currentPos.acc+'m';
+  }, err => {
+    document.getElementById('gps-global-txt').textContent = 'Error: '+err.message;
+  }, { enableHighAccuracy: true, maximumAge: 5000 });
+}
+
+/* ═══════════════════════════════════════════
+   SUPABASE — Load & Sync
+   ═══════════════════════════════════════════ */
+async function loadFromSupabase(){
+  try {
+    const { data, error } = await _supabase.from('assets').select('*');
+    if(error || !data) return;
+    data.forEach(row => {
+      const existing = assets.find(a => a.id === row.id);
+      const swLat = parseFloat(row.sw_lat) || 0;
+      const swLng = parseFloat(row.sw_lng) || 0;
+      const now = Date.now();
+      const lastSeen = row.last_seen ? new Date(row.last_seen).getTime() : now;
+      if(existing){
+        // Update SW position dari cloud
+        existing.swLat = swLat;
+        existing.swLng = swLng;
+        existing.swLastSeen = lastSeen;
+        existing.swStatus = row.sw_status || 'online';
+        existing.cloudLastSeen = row.last_seen || '—';
+        existing.swHb = [...existing.swHb.slice(1), 1];
+      } else {
+        // Asset baru dari cloud — tambah ke local
+        assets.push({
+          id: row.id,
+          name: row.name || row.id,
+          coord: row.coord || '—',
+          hwModel: row.hw_model || 'Unknown',
+          regLat: swLat, regLng: swLng,
+          swLat, swLng,
+          swStatus: row.sw_status || 'online',
+          swLastSeen: lastSeen,
+          swHb: Array(8).fill(1),
+          hwLat: swLat, hwLng: swLng,
+          hwStatus: 'online', hwLastSeen: now, hwBat: 85,
+          cloudLastSeen: row.last_seen || '—',
+          fromCloud: true
+        });
+        pushLog('enroll', row.id+' loaded dari Supabase', row.name||'');
+      }
+    });
+    renderAll();
+  } catch(e) {
+    console.warn('Supabase load error:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════
+   ENROLLMENT — dengan Supabase upsert
+   ═══════════════════════════════════════════ */
+function captureGPS(){
+  const prev = document.getElementById('gps-prev');
+  prev.style.display = 'block';
+  prev.textContent = 'Mengambil GPS...';
+  const fb = () => {
+    const la = currentPos.lat || -6.253266;
+    const lo = currentPos.lng || 106.864660;
+    document.getElementById('e-lat').value = la.toFixed(7);
+    document.getElementById('e-lng').value = lo.toFixed(7);
+    prev.style.color = 'var(--blu)';
+    prev.textContent = `GPS: ${la.toFixed(6)}, ${lo.toFixed(6)} (±${currentPos.acc||'?'}m)`;
+  };
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(p => {
+      document.getElementById('e-lat').value = p.coords.latitude.toFixed(7);
+      document.getElementById('e-lng').value = p.coords.longitude.toFixed(7);
+      prev.style.color = 'var(--blu)';
+      prev.textContent = `GPS: ${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)} (±${Math.round(p.coords.accuracy)}m)`;
+    }, fb);
+  } else fb();
+}
+
+async function enrollDevice(){
+  const id   = (document.getElementById('e-id').value||'').trim().toUpperCase();
+  const name = (document.getElementById('e-name').value||'').trim();
+  const coord= (document.getElementById('e-coord').value||'').trim();
+  const lat  = parseFloat(document.getElementById('e-lat').value);
+  const lng  = parseFloat(document.getElementById('e-lng').value);
+  const hwModel = document.getElementById('e-hw').value;
+  const bat  = parseInt(document.getElementById('e-bat').value)||100;
+  const msg  = document.getElementById('e-msg');
+  const show = (txt,c) => { msg.style.display='block'; msg.style.color=c; msg.textContent=txt; setTimeout(()=>msg.style.display='none',3500); };
+  if(!id) return show('Device ID wajib diisi','var(--red)');
+  if(isNaN(lat)||isNaN(lng)) return show('Koordinat tidak valid — klik Set Current Location terlebih dahulu','var(--red)');
+  if(assets.find(a=>a.id===id)) return show('Device ID sudah terdaftar','var(--amb)');
+
+  // Simpan ke Supabase
+  const { error } = await _supabase.from('assets').upsert({
+    id, name: name||id, coord: coord||'—',
+    sw_lat: lat, sw_lng: lng,
+    hw_model: hwModel,
+    sw_status: 'online',
+    last_seen: new Date().toISOString()
+  });
+
+  if(error){
+    show('Supabase error: '+error.message,'var(--red)');
+    return;
+  }
+
+  // Tambah ke local state juga
+  assets.push({
+    id, name: name||id, coord: coord||'—', hwModel,
+    regLat:lat, regLng:lng,
+    swLat:lat, swLng:lng, swStatus:'online', swLastSeen:Date.now(), swHb:Array(8).fill(1),
+    hwLat:lat, hwLng:lng, hwStatus:'online', hwLastSeen:Date.now(), hwBat:bat,
+    cloudLastSeen: new Date().toISOString()
+  });
+
+  pushLog('enroll', id+' berhasil didaftarkan', `Home: ${lat.toFixed(6)},${lng.toFixed(6)} · HW: ${hwModel} · ☁️ Supabase OK`);
+  show(`${id} berhasil didaftarkan & disimpan ke cloud!`, 'var(--grn)');
+  ['e-id','e-name','e-coord','e-lat','e-lng'].forEach(i => document.getElementById(i).value='');
+  document.getElementById('gps-prev').style.display='none';
+  renderAll();
+}
+
+/* ═══════════════════════════════════════════
+   RENDER FUNCTIONS
+   ═══════════════════════════════════════════ */
+function renderLog(){
+  const el = document.getElementById('alog');
+  document.getElementById('log-ct').textContent = evLog.length;
+  if(!evLog.length){ el.innerHTML='<div class="empty">No alerts yet</div>'; return; }
+  const cm = {theft:'lt',lost:'lt',oob:'lo',hw:'lh',on:'ln',info:'li2',enroll:'li2',del:'lt'};
+  const tm = {theft:'possible theft',lost:'both offline',oob:'out of bounds',hw:'hw event',on:'online',info:'info',enroll:'enrolled',del:'deleted'};
+  el.innerHTML = evLog.map(l => `<div class="li ${cm[l.type]||'li2'} fi">
+    <div style="display:flex;justify-content:space-between"><span class="al-m">${l.msg}</span><span class="al-t">${l.t}</span></div>
+    <div class="al-s">${l.sub}</div>
+    <span class="al-tag" style="background:var(--${l.type==='theft'||l.type==='lost'||l.type==='del'?'red':l.type==='oob'?'amb':l.type==='hw'?'pur':l.type==='enroll'?'blu':'grn'}-bg);color:var(--${l.type==='theft'||l.type==='lost'||l.type==='del'?'red':l.type==='oob'?'amb':l.type==='hw'?'pur':l.type==='enroll'?'blu':'grn'}-tx)">${tm[l.type]||l.type}</span>
+  </div>`).join('');
+}
+
+function renderMetrics(){
+  const full    = assets.filter(a=>swSt(a)==='online'&&hwSt(a)==='online').length;
+  const hwonly  = assets.filter(a=>swSt(a)==='offline'&&hwSt(a)==='online').length;
+  const both    = assets.filter(a=>swSt(a)==='offline'&&hwSt(a)==='offline').length;
+  const oob     = assets.filter(a=>threat(a)==='oob').length;
+  document.getElementById('m-tot').textContent   = assets.length;
+  document.getElementById('m-full').textContent  = full;
+  document.getElementById('m-hwonly').textContent= hwonly;
+  document.getElementById('m-both').textContent  = both;
+  document.getElementById('m-oob').textContent   = oob;
+  document.getElementById('tbl-upd').textContent = 'Updated '+fmT();
+  const sd=document.getElementById('sdot'), st=document.getElementById('stxt');
+  if(hwonly>0){sd.className='dot d-err';st.textContent=hwonly+' possible theft — HW tracking';}
+  else if(both>0){sd.className='dot d-err';st.textContent=both+' assets both layers offline';}
+  else if(oob>0){sd.className='dot d-warn';st.textContent=oob+' asset out of bounds';}
+  else{sd.className='dot d-ok';st.textContent='System nominal';}
+  const bn = document.getElementById('main-ban');
+  const thefts = assets.filter(a=>threat(a)==='theft');
+  const losts  = assets.filter(a=>threat(a)==='lost');
+  if(thefts.length){
+    bn.className='banner ban-err fi';
+    bn.innerHTML=`<div class="ban-ic bic-e"><i class="ti ti-shield-off" style="font-size:13px"></i></div><div><div class="ban-ttl">Possible theft — hardware tracker still active</div><div class="ban-sub">${thefts.map(a=>`${a.id}: SW offline, HW at ${fmC(a.hwLat)},${fmC(a.hwLng)}`).join(' | ')}</div></div>`;
+  } else if(losts.length){
+    bn.className='banner ban-err fi';
+    bn.innerHTML=`<div class="ban-ic bic-e"><i class="ti ti-alert-triangle" style="font-size:13px"></i></div><div><div class="ban-ttl">Critical — both layers offline</div><div class="ban-sub">${losts.map(a=>`${a.id}: last SW ${fmC(a.swLat)},${fmC(a.swLng)}`).join(' | ')}</div></div>`;
+  } else if(oob>0){
+    bn.className='banner ban-warn fi';
+    bn.innerHTML=`<div class="ban-ic bic-w"><i class="ti ti-map-pin-exclamation" style="font-size:13px"></i></div><div><div class="ban-ttl">Geofence breach detected</div><div class="ban-sub">${assets.filter(a=>threat(a)==='oob').map(a=>`${a.id}: ${fmD(HAV(a.regLat,a.regLng,a.swLat,a.swLng))}`).join(' | ')}</div></div>`;
+  } else {
+    bn.className='banner hidden';
+  }
+}
+
+function isMobile(){ return window.innerWidth <= 640; }
+
+function renderMobileCards(){
+  const wrap = document.getElementById('mobile-asset-cards');
+  const tableCard = document.getElementById('asset-table-card');
+  if(!isMobile()){
+    tableCard.style.display='';
+    wrap.style.display='none';
+    return;
+  }
+  tableCard.style.display='none';
+  wrap.style.display='block';
+  if(!assets.length){ wrap.innerHTML='<div class="empty">Belum ada asset</div>'; return; }
+  wrap.innerHTML = assets.map(a=>{
+    const sw=swSt(a),hw=hwSt(a),thr=threat(a);
+    const hwD=HAV(a.regLat,a.regLng,a.hwLat,a.hwLng);
+    const bc=a.hwBat>50?'var(--grn)':a.hwBat>20?'var(--amb)':'var(--red)';
+    const bgRow=thr==='theft'||thr==='lost'?'background:var(--red-bg);border-color:var(--red)':thr==='oob'?'background:var(--amb-bg);border-color:var(--amb)':'';
+    const swb=sw==='online'?'<span class="bdg b-on">SW Online</span>':sw==='oob'?'<span class="bdg b-oob">SW OOB</span>':'<span class="bdg b-off">SW Offline</span>';
+    const hwb=hw==='online'?'<span class="bdg b-hw">HW Active</span>':'<span class="bdg b-off">HW Off</span>';
+    const thrb=thr==='safe'?'<span class="bdg b-tel">Safe</span>':thr==='theft'?'<span class="bdg b-off">⚠ Theft</span>':thr==='lost'?'<span class="bdg b-off">Lost</span>':'<span class="bdg b-oob">OOB</span>';
+    return `<div class="card fi" style="${bgRow};margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-family:monospace;font-size:13px;font-weight:600;color:var(--blu)">${a.id}${a.fromCloud?'<span style="font-size:9px;margin-left:4px">☁️</span>':''}</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:1px">${a.name} · ${a.coord||'—'}</div>
+        </div>
+        <div>${thrb}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        ${swb} ${hwb}
+        <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:var(--bg2);color:${bc};font-weight:500">${hw==='online'?'🔋 '+Math.round(a.hwBat)+'%':'🔋 —'}</span>
+        <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:var(--bg2);color:${hwD>100?'var(--red)':'var(--grn)'};font-weight:500">📍 ${fmD(hwD)}</span>
+      </div>
+      <div style="font-size:10px;font-family:monospace;color:var(--tx3);background:var(--bg2);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+        <span style="color:var(--tx3)">SW</span> <span style="color:var(--blu)">${fmC(a.swLat)}, ${fmC(a.swLng)}</span><br>
+        <span style="color:var(--tx3)">HW</span> <span style="color:var(--pur-tx)">${fmC(a.hwLat)}, ${fmC(a.hwLng)}</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn bd" style="flex:1;justify-content:center;padding:9px 4px;font-size:11px" onclick="swKill('${a.id}')"><i class="ti ti-power"></i> Off</button>
+        <button class="btn bs" style="flex:1;justify-content:center;padding:9px 4px;font-size:11px" onclick="swWake('${a.id}')"><i class="ti ti-refresh"></i> On</button>
+        <button class="btn bu" style="flex:1;justify-content:center;padding:9px 4px;font-size:11px" onclick="hwToggle('${a.id}')"><i class="ti ti-cpu"></i> HW</button>
+        <button class="btn bd" style="padding:9px 10px;font-size:11px" onclick="quickDel('${a.id}')"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTable(){
+  renderMobileCards();
+  const tb = document.getElementById('main-tbody');
+  tb.innerHTML = assets.map(a => {
+    const sw=swSt(a), hw=hwSt(a), thr=threat(a);
+    const hwD = HAV(a.regLat,a.regLng,a.hwLat,a.hwLng);
+    const rc  = thr==='theft'||thr==='lost'?'roff':thr==='oob'?'roob':sw==='offline'&&hw==='online'?'rhw':'';
+    const swb = sw==='online'?'<span class="bdg b-on"><i class="ti ti-circle" style="font-size:8px"></i>Online</span>':sw==='oob'?'<span class="bdg b-oob">OOB</span>':'<span class="bdg b-off">Offline</span>';
+    const hwb = hw==='online'?'<span class="bdg b-hw"><i class="ti ti-cpu" style="font-size:8px"></i>Active</span>':'<span class="bdg b-off">Offline</span>';
+    const thrb= thr==='safe'?'<span class="bdg b-tel">Safe</span>':thr==='theft'?'<span class="bdg b-off">Theft</span>':thr==='lost'?'<span class="bdg b-off">Lost</span>':'<span class="bdg b-oob">OOB</span>';
+    const bc  = a.hwBat>50?'var(--grn)':a.hwBat>20?'var(--amb)':'var(--red)';
+    const liveTag = a.fromCloud ? '<span class="bdg b-tel" style="margin-left:2px">☁️</span>' : '';
+    return `<tr class="${rc}">
+      <td><span class="mono" style="color:var(--blu);font-size:10px;font-weight:500">${a.id}</span>${liveTag}<br><span style="font-size:9px;color:var(--tx3)">${a.name}</span></td>
+      <td>${swb}</td><td>${hwb}</td><td>${thrb}</td>
+      <td class="col-swloc" style="font-size:9px;font-family:monospace;color:var(--tx3)">${fmC(a.swLat)}<br>${fmC(a.swLng)}</td>
+      <td class="col-hwloc" style="font-size:9px;font-family:monospace;color:${hw==='online'?'var(--pur-tx)':'var(--tx3)'}">${fmC(a.hwLat)}<br>${fmC(a.hwLng)}</td>
+      <td class="col-dev"><span style="color:${bc};font-weight:500;font-size:10px">${hw==='online'?Math.round(a.hwBat)+'%':'—'}</span><div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:2px;overflow:hidden"><div style="height:100%;width:${hw==='online'?Math.round(a.hwBat):0}%;background:${bc};transition:width .5s"></div></div></td>
+      <td><span style="color:${hwD>100?'var(--red)':'var(--grn)'};font-weight:500">${fmD(hwD)}</span></td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn bd" style="padding:5px 7px;font-size:10px" onclick="swKill('${a.id}')" title="Matikan SW"><i class="ti ti-power"></i><span class="btn-lbl"> Off</span></button>
+        <button class="btn bs" style="padding:5px 7px;font-size:10px" onclick="swWake('${a.id}')" title="Hidupkan SW"><i class="ti ti-refresh"></i><span class="btn-lbl"> On</span></button>
+        <button class="btn bu" style="padding:5px 7px;font-size:10px" onclick="hwToggle('${a.id}')" title="Toggle HW"><i class="ti ti-cpu"></i></button>
+        <button class="btn bd" style="padding:5px 7px;font-size:10px" onclick="quickDel('${a.id}')" title="Hapus"><i class="ti ti-trash"></i></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function syncSelects(){
+  const opts = assets.map(a=>`<option value="${a.id}">${a.id} — ${a.name}</option>`).join('');
+  const all  = '<option value="all">Semua asset</option>';
+  ['sim-sel','client-sel','map-sel','tl-sel'].forEach(id => {
+    const el = document.getElementById(id);
+    const pv = el.value;
+    el.innerHTML = (id==='sim-sel'?'':all)+opts;
+    if(assets.find(a=>a.id===pv)) el.value = pv;
+    else if(id==='client-sel'&&assets.length) el.value = assets[0].id;
+  });
+}
+
+function renderEnrolled(){
+  const el = document.getElementById('enr-list');
+  document.getElementById('e-cnt').textContent = assets.length+' devices';
+  if(!assets.length){ el.innerHTML='<div class="empty">Belum ada device</div>'; return; }
+  el.innerHTML = assets.map(a=>`<div class="enr-item fi">
+    <div>
+      <div class="ei-id">${a.id} ${a.fromCloud?'<span style="font-size:8px;color:var(--grn-tx)">☁️ cloud</span>':''}</div>
+      <div class="ei-info">${a.name} · ${a.coord} · ${a.hwModel}</div>
+      <div class="ei-info">${fmC(a.regLat)}, ${fmC(a.regLng)}</div>
+      ${a.cloudLastSeen ? `<div class="ei-info">Last seen: ${a.cloudLastSeen}</div>` : ''}
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+      <span class="bdg b-blu">Enrolled</span>
+      <button class="btn bd" style="padding:2px 7px;font-size:9px" onclick="quickDel('${a.id}')"><i class="ti ti-trash"></i> Hapus</button>
+    </div>
+  </div>`).join('');
+}
+
+function renderTimeline(){
+  const filter = document.getElementById('tl-sel').value;
+  const wrap   = document.getElementById('tl-wrap');
+  const events = filter==='all' ? evLog : evLog.filter(e=>e.msg.includes(filter));
+  if(!events.length){ wrap.innerHTML='<div class="empty">Belum ada event</div>'; return; }
+  const bc = {theft:['var(--red-bg)','var(--red)'],lost:['var(--red-bg)','var(--red)'],oob:['var(--amb-bg)','var(--amb)'],hw:['var(--pur-bg)','var(--pur)'],on:['var(--grn-bg)','var(--grn)'],info:['var(--blu-bg)','var(--blu)'],enroll:['var(--blu-bg)','var(--blu)'],del:['var(--red-bg)','var(--red)']};
+  wrap.innerHTML = `<div>${events.map((e,i)=>{
+    const c = bc[e.type]||bc.info;
+    return `<div class="tl-item">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div style="width:10px;height:10px;border-radius:50%;background:${c[0]};border:2px solid ${c[1]};flex-shrink:0;margin-top:3px"></div>
+        ${i<events.length-1?'<div class="tl-line"></div>':''}
+      </div>
+      <div style="flex:1"><div class="tl-ttl">${e.msg}</div><div class="tl-sub">${e.sub}</div><div class="tl-time"><i class="ti ti-clock" style="font-size:10px"></i> ${e.t}</div></div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ═══════════════════════════════════════════
+   MAP
+   ═══════════════════════════════════════════ */
+function initMap1(){
+  if(leafMap1){ leafMap1.remove(); leafMap1=null; mapMarkers1=[]; }
+  const c = assets.length ? [assets[0].regLat,assets[0].regLng] : [-6.253266,106.864660];
+  leafMap1 = L.map('map1',{zoomControl:true,attributionControl:false}).setView(c,14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(leafMap1);
+  refreshMap();
+  setTimeout(()=>leafMap1.invalidateSize(),80);
+}
+
+function refreshMap(){
+  if(!leafMap1) return;
+  mapMarkers1.forEach(m=>{ try{ leafMap1.removeLayer(m); }catch(e){} });
+  mapMarkers1 = [];
+  const fv   = document.getElementById('map-sel').value;
+  const list = fv==='all' ? assets : assets.filter(a=>a.id===fv);
+  list.forEach(a => {
+    const sw=swSt(a), hw=hwSt(a), thr=threat(a);
+    const gc = L.circle([a.regLat,a.regLng],{radius:100,color:thr==='oob'?'#ef9f27':'#3b6d11',fillColor:'#3b6d11',fillOpacity:0.04,weight:1,dashArray:'4,3'}).addTo(leafMap1);
+    mapMarkers1.push(gc);
+    const hIco = L.divIcon({html:'<div style="width:11px;height:11px;background:#185fa5;border:2px solid #85b7eb;border-radius:50%"></div>',iconAnchor:[5,5],className:''});
+    mapMarkers1.push(L.marker([a.regLat,a.regLng],{icon:hIco}).addTo(leafMap1).bindTooltip(a.id+' home'));
+    const swC = sw==='online'?'#3b6d11':sw==='oob'?'#854f0b':'#a32d2d';
+    const swIco = L.divIcon({html:`<div style="width:10px;height:10px;background:${swC};border:2px solid #fff;border-radius:50%"></div>`,iconAnchor:[5,5],className:''});
+    mapMarkers1.push(L.marker([a.swLat,a.swLng],{icon:swIco}).addTo(leafMap1)
+      .bindTooltip(`${a.id} SW (${sw})`,{direction:'top'})
+      .on('click',()=>{ document.getElementById('map-detail').textContent=`${a.id} — SW: ${sw} | ${fmC(a.swLat)},${fmC(a.swLng)} | HW: ${hw} | bat:${Math.round(a.hwBat)}% | threat:${threat(a)}`; }));
+    if(hw==='online'){
+      const hwIco = L.divIcon({html:'<div style="width:10px;height:10px;background:#7f77dd;border:2px solid #afa9ec;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></div>',iconAnchor:[5,5],className:''});
+      mapMarkers1.push(L.marker([a.hwLat,a.hwLng],{icon:hwIco}).addTo(leafMap1).bindTooltip(`${a.id} HW (bat:${Math.round(a.hwBat)}%)`,{direction:'top'}));
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════
+   CLIENT VIEW
+   ═══════════════════════════════════════════ */
+function renderClient(){
+  const id = document.getElementById('client-sel').value;
+  const a  = assets.find(x=>x.id===id); if(!a) return;
+  const sw=swSt(a), hw=hwSt(a), thr=threat(a);
+  const dist = HAV(a.regLat,a.regLng,a.swLat,a.swLng);
+  const ring=document.getElementById('c-ring'), icon=document.getElementById('c-icon');
+  const stxt=document.getElementById('c-stxt'), csub=document.getElementById('c-sub');
+  if(thr==='theft'){ring.className='cring cr-off';icon.className='ti ti-shield-off';icon.style.color='var(--red)';stxt.textContent='Possible theft!';stxt.style.color='var(--red)';csub.textContent='SW offline — HW masih tracking';}
+  else if(thr==='lost'){ring.className='cring cr-off';icon.className='ti ti-alert-triangle';icon.style.color='var(--red)';stxt.textContent='Both layers offline';stxt.style.color='var(--red)';csub.textContent='Last known location shown';}
+  else if(thr==='oob'){ring.className='cring cr-oob';icon.className='ti ti-alert-circle';icon.style.color='var(--amb)';stxt.textContent='Out of bounds!';stxt.style.color='var(--amb)';csub.textContent='Asset keluar geofence — '+fmD(dist);}
+  else{ring.className='cring cr-ok';icon.className='ti ti-shield-check';icon.style.color='var(--grn)';stxt.textContent='Monitoring active';stxt.style.color='var(--grn)';csub.textContent='Aset dalam zona aman';}
+  const age  = (Date.now()-a.swLastSeen)/1000;
+  const hbP  = Math.max(0, 100-age/HB_TO*100);
+  const hbF  = document.getElementById('c-hbf');
+  hbF.style.width = Math.round(hbP)+'%';
+  hbF.style.background = hbP>60?'var(--grn)':hbP>30?'var(--amb)':'var(--red)';
+  document.getElementById('c-ticks').innerHTML = a.swHb.map(v=>`<div class="hbd ${v?'alive':''}"></div>`).join('');
+  document.getElementById('c-reg').textContent = `${fmC(a.regLat)}, ${fmC(a.regLng)}`;
+  document.getElementById('c-sw').textContent  = `${fmC(a.swLat)}, ${fmC(a.swLng)}`;
+  document.getElementById('c-hw').textContent  = hw==='online'?`${fmC(a.hwLat)}, ${fmC(a.hwLng)} (HW active)`:`last: ${fmC(a.hwLat)}, ${fmC(a.hwLng)}`;
+  const de = document.getElementById('c-dist');
+  de.textContent = fmD(dist);
+  de.style.color = dist>100?'var(--red)':dist>50?'var(--amb)':'var(--grn)';
+  document.getElementById('c-lastseen').textContent = a.cloudLastSeen || 'lokal';
+  updateClientMap(a,thr);
+}
+
+function updateClientMap(a,thr){
+  if(!clientMap){
+    clientMap = L.map('map2',{zoomControl:true,attributionControl:false}).setView([a.regLat,a.regLng],17);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(clientMap);
+    clientGeo = L.circle([a.regLat,a.regLng],{radius:100,color:'#3b6d11',fillColor:'#3b6d11',fillOpacity:0.05,weight:1.5,dashArray:'5,3'}).addTo(clientMap);
+    const hIco = L.divIcon({html:'<div style="width:12px;height:12px;background:#185fa5;border:2px solid #85b7eb;border-radius:50%"></div>',iconAnchor:[6,6],className:''});
+    L.marker([a.regLat,a.regLng],{icon:hIco}).addTo(clientMap).bindTooltip('Home base');
+    const swIco = L.divIcon({html:'<div style="width:11px;height:11px;background:#3b6d11;border:2px solid #c0dd97;border-radius:50%"></div>',iconAnchor:[5,5],className:''});
+    clientSW = L.marker([a.swLat,a.swLng],{icon:swIco}).addTo(clientMap).bindTooltip(a.id+' SW',{permanent:true,direction:'top',offset:[0,-8]});
+    const hwIco = L.divIcon({html:'<div style="width:10px;height:10px;background:#7f77dd;border:2px solid #afa9ec;border-radius:50%;clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%)"></div>',iconAnchor:[5,5],className:''});
+    clientHW = L.marker([a.hwLat,a.hwLng],{icon:hwIco}).addTo(clientMap).bindTooltip('HW');
+    setTimeout(()=>clientMap.invalidateSize(),80);
+    return;
+  }
+  clientSW.setLatLng([a.swLat,a.swLng]);
+  clientHW.setLatLng([a.hwLat,a.hwLng]);
+  clientGeo.setLatLng([a.regLat,a.regLng]);
+  clientGeo.setStyle({color:thr==='oob'||thr==='theft'?'#e24b4a':'#3b6d11'});
+  clientMap.panTo([a.swLat,a.swLng],{animate:true,duration:0.4});
+}
+
+/* ═══════════════════════════════════════════
+   SIM DETAIL
+   ═══════════════════════════════════════════ */
+function renderSimDetail(){
+  const id = document.getElementById('sim-sel').value;
+  const a  = assets.find(x=>x.id===id);
+  if(!a){ document.getElementById('sim-detail').innerHTML='<div class="empty">Pilih asset</div>'; return; }
+  const sw=swSt(a), hw=hwSt(a), thr=threat(a);
+  document.getElementById('sim-detail').innerHTML=`
+    <div class="lc-row">
+      <div class="lc lc-sw"><div class="lc-ttl"><i class="ti ti-device-mobile"></i> SW layer</div>
+        <div class="lc-r"><span class="lc-k">Status</span><span class="lc-v" style="color:${sw==='online'?'var(--grn)':sw==='oob'?'var(--amb)':'var(--red)'}">${sw}</span></div>
+        <div class="lc-r"><span class="lc-k">Lat</span><span class="lc-v" style="color:var(--blu-tx)">${fmC(a.swLat)}</span></div>
+        <div class="lc-r"><span class="lc-k">Lng</span><span class="lc-v" style="color:var(--blu-tx)">${fmC(a.swLng)}</span></div>
+        <div class="lc-r"><span class="lc-k">Deviasi</span><span class="lc-v">${fmD(HAV(a.regLat,a.regLng,a.swLat,a.swLng))}</span></div>
+      </div>
+      <div class="lc lc-hw"><div class="lc-ttl"><i class="ti ti-cpu"></i> HW layer</div>
+        <div class="lc-r"><span class="lc-k">Status</span><span class="lc-v" style="color:${hw==='online'?'var(--pur)':'var(--red)'}">${hw}</span></div>
+        <div class="lc-r"><span class="lc-k">Lat</span><span class="lc-v" style="color:var(--pur-tx)">${fmC(a.hwLat)}</span></div>
+        <div class="lc-r"><span class="lc-k">Lng</span><span class="lc-v" style="color:var(--pur-tx)">${fmC(a.hwLng)}</span></div>
+        <div class="lc-r"><span class="lc-k">Battery</span><span class="lc-v" style="color:${a.hwBat>50?'var(--grn)':a.hwBat>20?'var(--amb)':'var(--red)'}">${Math.round(a.hwBat)}%</span></div>
+        <div class="lc-r"><span class="lc-k">Model</span><span class="lc-v" style="font-size:9px">${a.hwModel}</span></div>
+      </div>
+    </div>
+    <div style="background:${thr==='theft'||thr==='lost'?'var(--red-bg)':thr==='oob'?'var(--amb-bg)':'var(--grn-bg)'};border-radius:7px;padding:8px;border:0.5px solid ${thr==='theft'||thr==='lost'?'var(--red)':thr==='oob'?'var(--amb)':'var(--grn)'}">
+      <div style="font-size:11px;font-weight:500;color:${thr==='theft'||thr==='lost'?'var(--red-tx)':thr==='oob'?'var(--amb-tx)':'var(--grn-tx)'}">
+        ${thr==='theft'?'SW offline — hardware still tracking pergerakan pencuri':thr==='lost'?'Both layers offline — showing last known location':thr==='oob'?'Asset keluar dari geofence 100m':'All systems normal — dual layer active'}
+      </div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════
+   SIMULATOR ACTIONS
+   ═══════════════════════════════════════════ */
+function swKill(id){const a=assets.find(x=>x.id===id);if(!a)return;a.swStatus='offline';a.swLastSeen=Date.now()-HB_TO*1200;a.swHb=[...a.swHb.slice(1),0];pushLog('theft',`${id} — SW offline`,`Last SW: ${fmC(a.swLat)},${fmC(a.swLng)}`);playBeep();renderAll();}
+function swWake(id){const a=assets.find(x=>x.id===id);if(!a)return;a.swStatus='online';a.swLastSeen=Date.now();a.swHb=[...a.swHb.slice(1),1];pushLog('on',`${id} — SW online kembali`,'Heartbeat resumed');renderAll();}
+function hwToggle(id){const a=assets.find(x=>x.id===id);if(!a)return;if(hwSt(a)==='online'){a.hwStatus='offline';pushLog('hw',`${id} — HW tracker offline`,'Battery exhausted or signal lost');}else{a.hwStatus='online';a.hwLastSeen=Date.now();pushLog('hw',`${id} — HW tracker online`,'Signal restored');}renderAll();}
+function quickDel(id){document.getElementById('sim-sel').value=id;gotoTab('sim');askDel();}
+function askDel(){document.getElementById('del-box').className='del-box show';}
+function cancelDel(){document.getElementById('del-box').className='del-box';}
+async function confirmDel(){
+  const id=document.getElementById('sim-sel').value;
+  const idx=assets.findIndex(a=>a.id===id);if(idx===-1)return;
+  const a=assets[idx]; assets.splice(idx,1);
+  pushLog('del',`${id} dihapus dari sistem`,`${a.name} · ${a.coord}`);
+  document.getElementById('del-box').className='del-box';
+  // Juga hapus dari Supabase jika ada
+  await _supabase.from('assets').delete().eq('id', id);
+  if(clientMap){clientMap.remove();clientMap=null;clientSW=null;clientHW=null;clientGeo=null;}
+  renderAll();
+}
+function onSimChange(){document.getElementById('del-box').className='del-box';renderSimDetail();}
+function onClientSel(){if(clientMap){clientMap.remove();clientMap=null;clientSW=null;clientHW=null;clientGeo=null;}renderClient();}
+
+function simSW(type){
+  const id=document.getElementById('sim-sel').value;if(!id)return;
+  const a=assets.find(x=>x.id===id);if(!a)return;
+  if(type==='kill')swKill(id);
+  else if(type==='wake')swWake(id);
+  else if(type==='oob'){a.swLat=a.regLat+0.0011;a.swLng=a.regLng+0.0011;a.swStatus='online';a.swLastSeen=Date.now();a.swHb=[...a.swHb.slice(1),1];pushLog('oob',`${id} — SW geofence breach`,`Deviasi: ${fmD(HAV(a.regLat,a.regLng,a.swLat,a.swLng))}`);renderAll();}
+  else if(type==='home'){a.swLat=a.regLat;a.swLng=a.regLng;a.swStatus='online';a.swLastSeen=Date.now();a.swHb=[...a.swHb.slice(1),1];pushLog('on',`${id} — SW returned to home`,'0m deviasi');renderAll();}
+}
+function simHW(type){
+  const id=document.getElementById('sim-sel').value;if(!id)return;
+  const a=assets.find(x=>x.id===id);if(!a)return;
+  if(type==='kill'){a.hwStatus='offline';pushLog('hw',`${id} — HW battery dead`,'No more HW transmissions');renderAll();}
+  else if(type==='move'){a.hwLat=a.regLat+0.002+Math.random()*0.003;a.hwLng=a.regLng+0.002+Math.random()*0.003;a.hwStatus='online';a.hwLastSeen=Date.now();pushLog('hw',`${id} — HW tracker moved`,`New pos: ${fmC(a.hwLat)},${fmC(a.hwLng)}`);renderAll();}
+  else if(type==='wake'){a.hwStatus='online';a.hwLastSeen=Date.now();pushLog('hw',`${id} — HW tracker online`,'Signal restored');renderAll();}
+  else if(type==='home'){a.hwLat=a.regLat;a.hwLng=a.regLng;a.hwStatus='online';a.hwLastSeen=Date.now();pushLog('hw',`${id} — HW back at home base`,'0m');renderAll();}
+}
+
+function runScenario(type){
+  if(!assets.length) return;
+  const a=assets[0];
+  if(type==='stolen'){a.swStatus='offline';a.swLastSeen=Date.now()-HB_TO*1500;a.swHb=[...a.swHb.slice(1),0];a.hwLat=a.regLat+0.003;a.hwLng=a.regLng+0.004;a.hwStatus='online';a.hwLastSeen=Date.now();pushLog('theft',`${a.id} — THEFT SCENARIO`,`SW killed, HW tracking at ${fmC(a.hwLat)},${fmC(a.hwLng)}`);playBeep();}
+  else if(type==='findmy'){a.swStatus='offline';a.swLastSeen=Date.now()-HB_TO*1500;a.swHb=[...a.swHb.slice(1),0];a.hwLat=a.regLat+0.001;a.hwLng=a.regLng+0.002;a.hwStatus='online';pushLog('hw',`${a.id} — Find My simulation`,`SW offline, HW beacon at ${fmC(a.hwLat)},${fmC(a.hwLng)}`);}
+  else{a.swStatus='offline';a.swLastSeen=Date.now()-HB_TO*1500;a.swHb=[...a.swHb.slice(1),0];a.hwStatus='offline';pushLog('lost',`${a.id} — BOTH LAYERS OFFLINE`,`Last SW: ${fmC(a.swLat)},${fmC(a.swLng)}`);playBeep();}
+  document.getElementById('sim-sel').value=a.id;
+  gotoTab('sim'); renderAll();
+}
+
+/* ═══════════════════════════════════════════
+   NAVIGATION
+   ═══════════════════════════════════════════ */
+function gotoTab(name){
+  document.querySelectorAll('.view').forEach(v=>v.className='view');
+  document.querySelectorAll('.tab').forEach(t=>t.className='tab');
+  document.querySelectorAll('.bnav-item').forEach(t=>t.classList.remove('on'));
+  document.getElementById('view-'+name).className='view on';
+  document.getElementById('t-'+name).className='tab on';
+  const bn=document.getElementById('bn-'+name);if(bn)bn.classList.add('on');
+  if(name==='map') setTimeout(()=>{ if(!leafMap1) initMap1(); else{ leafMap1.invalidateSize(); refreshMap(); } },60);
+  if(name==='client') setTimeout(()=>{ renderClient(); if(clientMap) clientMap.invalidateSize(); },60);
+  if(name==='sim') renderSimDetail();
+  if(name==='timeline') renderTimeline();
+  // Scroll to top on mobile tab switch
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function toggleTheme(){
+  isDark = !isDark;
+  document.body.className = isDark ? 'dark' : '';
+  document.getElementById('ticon').className = isDark ? 'ti ti-moon' : 'ti ti-sun';
+  document.getElementById('tlbl').textContent = isDark ? 'Dark' : 'Light';
+  [leafMap1, clientMap].forEach(m=>{ if(m) try{ m.invalidateSize(); }catch(e){} });
+}
+
+function renderAll(){
+  renderMetrics(); renderTable(); renderLog(); syncSelects(); renderEnrolled(); renderTimeline();
+  if(document.getElementById('view-sim').classList.contains('on')) renderSimDetail();
+  if(document.getElementById('view-map').classList.contains('on')) refreshMap();
+  if(document.getElementById('view-client').classList.contains('on')) renderClient();
+}
+
+/* ═══════════════════════════════════════════
+   AUDIO
+   ═══════════════════════════════════════════ */
+let audioCtx=null;
+function playBeep(){try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type='square';o.frequency.value=880;g.gain.setValueAtTime(0.07,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.3);o.start();o.stop(audioCtx.currentTime+0.3);}catch(e){}}
+
+/* ═══════════════════════════════════════════
+   HEARTBEAT TICK — update HW bat lokal tiap 3s
+   ═══════════════════════════════════════════ */
+setInterval(()=>{
+  assets.forEach(a=>{
+    if(a.swStatus==='online'){ a.swLastSeen=Date.now(); a.swHb=[...a.swHb.slice(1),1]; }
+    if(a.hwStatus==='online'){ a.hwLastSeen=Date.now(); a.hwBat=Math.max(0,a.hwBat-0.008); }
+  });
+  renderAll();
+}, 3000);
+
+// Poll Supabase tiap 5 detik (sama dengan versi simpel)
+setInterval(loadFromSupabase, 5000);
+
+// Clock
+setInterval(()=>{ document.getElementById('clk').textContent=fmT(); },1000);
+document.getElementById('clk').textContent = fmT();
+
+/* ═══════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════ */
+startGpsTracking();
+loadFromSupabase();
+renderAll();
+pushLog('info','System initialized','Live GPS + Supabase + dual-layer monitor aktif');
+
+/* ═══════════════════════════════════════════
+   BATTERY API — deteksi baterai device (SW layer)
+   ═══════════════════════════════════════════ */
+let deviceBattery = null;
+async function initBattery(){
+  if(!('getBattery' in navigator)) return;
+  try {
+    const bat = await navigator.getBattery();
+    deviceBattery = bat;
+    updateBatteryUI(bat);
+    bat.addEventListener('levelchange',  () => updateBatteryUI(bat));
+    bat.addEventListener('chargingchange',() => updateBatteryUI(bat));
+  } catch(e) { console.warn('Battery API error:', e); }
+}
+function updateBatteryUI(bat){
+  const pct  = Math.round(bat.level * 100);
+  const icon = bat.charging ? '⚡' : pct > 50 ? '🔋' : pct > 20 ? '🪫' : '❗';
+  const col  = bat.charging ? 'var(--blu)' : pct > 50 ? 'var(--grn)' : pct > 20 ? 'var(--amb)' : 'var(--red)';
+  // Tampilkan di topbar
+  let pill = document.getElementById('bat-pill');
+  if(!pill){
+    pill = document.createElement('div');
+    pill.id = 'bat-pill';
+    pill.className = 'pill';
+    document.querySelector('.tbr').insertBefore(pill, document.getElementById('gps-global-pill'));
+  }
+  pill.innerHTML = `<span style="color:${col};font-weight:500">${icon} ${pct}%${bat.charging?' charging':''}</span>`;
+  // Update semua asset yang aktif — sync baterai SW device ke hwBat simulasi
+  assets.forEach(a => {
+    if(a.swStatus === 'online') {
+      a.deviceBatPct = pct;
+      a.deviceBatCharging = bat.charging;
+    }
+  });
+}
+initBattery();
+
+/* ═══════════════════════════════════════════
+   PWA — Install prompt & Service Worker
+   ═══════════════════════════════════════════ */
+let pwaInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  pwaInstallPrompt = e;
+  // Tampilkan tombol install
+  let btn = document.getElementById('pwa-install-btn');
+  if(!btn){
+    btn = document.createElement('button');
+    btn.id = 'pwa-install-btn';
+    btn.className = 'tbtn';
+    btn.style.cssText = 'background:var(--blu);color:#fff;border-color:var(--blu)';
+    btn.innerHTML = '<i class="ti ti-download"></i><span> Install App</span>';
+    btn.onclick = async () => {
+      if(!pwaInstallPrompt) return;
+      pwaInstallPrompt.prompt();
+      const { outcome } = await pwaInstallPrompt.userChoice;
+      if(outcome === 'accepted') {
+        btn.remove();
+        pushLog('info','App berhasil di-install','Asset Tracker tersimpan di home screen');
+      }
+      pwaInstallPrompt = null;
+    };
+    document.querySelector('.tbr').appendChild(btn);
+  }
+});
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('pwa-install-btn');
+  if(btn) btn.remove();
+  pushLog('info','App installed!','Asset Tracker berjalan sebagai PWA');
+});
+
+// Register Service Worker (file sw.js harus ada di folder yang sama)
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log('SW registered'))
+      .catch(e => console.warn('SW registration failed:', e));
+  });
+}
+</script>
+</body>
+</html>
