@@ -698,7 +698,8 @@ function pushLog(type,msg,sub){
 }
 
 /* ═══════════════════════════════════════════
-   LIVE GPS — Browser Geolocation (sama dgn versi simpel)
+   LIVE GPS — Browser Geolocation
+   Push HANYA ke asset yang di-enroll di device ini
    ═══════════════════════════════════════════ */
 function startGpsTracking(){
   if(!navigator.geolocation) return;
@@ -706,30 +707,35 @@ function startGpsTracking(){
     currentPos.lat = pos.coords.latitude;
     currentPos.lng = pos.coords.longitude;
     currentPos.acc = Math.round(pos.coords.accuracy);
-    // Update pill di topbar
     document.getElementById('gps-global-txt').textContent =
       currentPos.lat.toFixed(4)+', '+currentPos.lng.toFixed(4);
-    // Update enroll view display
     document.getElementById('enr-gps-lat').textContent = currentPos.lat.toFixed(6);
     document.getElementById('enr-gps-lng').textContent = currentPos.lng.toFixed(6);
     document.getElementById('enr-gps-acc').textContent = '±'+currentPos.acc+'m';
 
-    // ── Push posisi + status online ke Supabase untuk semua asset yg sw online ──
-    assets.forEach(async a => {
-      if(a.swStatus === 'online' && a.fromCloud){
-        const batPct = deviceBattery ? Math.round(deviceBattery.level*100) : null;
-        const batChg = deviceBattery ? deviceBattery.charging : null;
-        const payload = {
-          sw_lat: currentPos.lat,
-          sw_lng: currentPos.lng,
-          sw_status: 'online',
-          last_seen: new Date().toISOString()
-        };
-        if(batPct !== null){ payload.sw_battery = batPct; payload.sw_bat_charging = batChg; }
-        try {
-          await _supabase.from('assets').update(payload).eq('id', a.id);
-        } catch(e){ /* silent */ }
-      }
+    // ── Hanya push ke asset MILIK device ini ──
+    const myIds = getOwnedAssetIds();
+    if(!myIds.length) return; // admin/viewer murni → tidak push apapun
+
+    myIds.forEach(async id => {
+      const a = assets.find(x => x.id === id);
+      if(!a || !a.fromCloud) return;
+      const batPct = deviceBattery ? Math.round(deviceBattery.level * 100) : null;
+      const batChg = deviceBattery ? deviceBattery.charging : null;
+      const payload = {
+        sw_lat:    currentPos.lat,
+        sw_lng:    currentPos.lng,
+        sw_status: 'online',
+        last_seen: new Date().toISOString()
+      };
+      if(batPct !== null){ payload.sw_battery = batPct; payload.sw_bat_charging = batChg; }
+      try {
+        await _supabase.from('assets').update(payload).eq('id', id);
+        // Update local state
+        a.swLat = currentPos.lat;
+        a.swLng = currentPos.lng;
+        a.swLastSeen = Date.now();
+      } catch(e){ /* silent */ }
     });
   }, err => {
     document.getElementById('gps-global-txt').textContent = 'Error: '+err.message;
@@ -865,8 +871,12 @@ async function enrollDevice(){
     regLat:lat, regLng:lng,
     swLat:lat, swLng:lng, swStatus:'online', swLastSeen:Date.now(), swHb:Array(8).fill(1),
     hwLat:lat, hwLng:lng, hwStatus:'online', hwLastSeen:Date.now(), hwBat:bat,
-    cloudLastSeen: new Date().toISOString()
+    cloudLastSeen: new Date().toISOString(),
+    fromCloud: true
   });
+
+  // Tandai device ini sebagai owner — baterai & GPS akan di-push untuk asset ini
+  addOwnedAsset(id);
 
   pushLog('enroll', id+' berhasil didaftarkan', `Home: ${lat.toFixed(6)},${lng.toFixed(6)} · HW: ${hwModel} · ☁️ Supabase OK`);
   show(`${id} berhasil didaftarkan & disimpan ke cloud!`, 'var(--grn)');
@@ -1314,60 +1324,84 @@ renderAll();
 pushLog('info','System initialized','Live GPS + Supabase + dual-layer monitor aktif');
 
 /* ═══════════════════════════════════════════
-   BATTERY API — deteksi baterai device (SW layer)
+   BATTERY API — hanya untuk device OWNER
+   ═══════════════════════════════════════════
+   PRINSIP:
+   - Battery hanya boleh dibaca & di-push oleh device yang MEMILIKI asset tersebut
+   - "Kepemilikan" ditentukan dari localStorage key 'owned_assets' yang diset saat enroll
+   - Admin/viewer yang hanya buka dashboard tidak punya owned_assets → tidak push
+   - Dashboard hanya MEMBACA sw_battery dari Supabase (dilakukan di loadFromSupabase)
    ═══════════════════════════════════════════ */
+
+// Baca daftar asset ID yang di-enroll di device ini
+function getOwnedAssetIds(){
+  try { return JSON.parse(localStorage.getItem('owned_assets') || '[]'); }
+  catch(e){ return []; }
+}
+function addOwnedAsset(id){
+  const list = getOwnedAssetIds();
+  if(!list.includes(id)){ list.push(id); localStorage.setItem('owned_assets', JSON.stringify(list)); }
+}
+function removeOwnedAsset(id){
+  const list = getOwnedAssetIds().filter(x=>x!==id);
+  localStorage.setItem('owned_assets', JSON.stringify(list));
+}
+
 let deviceBattery = null;
+const ownedIds = getOwnedAssetIds(); // snapshot saat load
+
 async function initBattery(){
+  // Kalau device ini tidak punya asset yang di-enroll → skip sama sekali
+  // Battery pill tetap ditampilkan untuk info device sendiri, tapi TIDAK push ke Supabase
   if(!('getBattery' in navigator)) return;
   try {
     const bat = await navigator.getBattery();
     deviceBattery = bat;
     updateBatteryUI();
-    bat.addEventListener('levelchange',   updateBatteryUI);
-    bat.addEventListener('chargingchange',updateBatteryUI);
+    bat.addEventListener('levelchange',    updateBatteryUI);
+    bat.addEventListener('chargingchange', updateBatteryUI);
     bat.addEventListener('dischargingtimechange', updateBatteryUI);
-    // Poll tiap 10 detik untuk pastikan selalu sinkron
-    setInterval(updateBatteryUI, 10000);
-  } catch(e) { console.warn('Battery API error:', e); }
+    setInterval(updateBatteryUI, 15000);
+  } catch(e){ console.warn('Battery API:', e); }
 }
+
 function updateBatteryUI(){
   const bat = deviceBattery;
   if(!bat) return;
-  // Selalu baca langsung dari object battery — tidak pakai nilai cache
   const pct  = Math.round(bat.level * 100);
   const icon = bat.charging ? '⚡' : pct > 50 ? '🔋' : pct > 20 ? '🪫' : '❗';
   const col  = bat.charging ? 'var(--blu)' : pct > 50 ? 'var(--grn)' : pct > 20 ? 'var(--amb)' : 'var(--red)';
-  let pill = document.getElementById('bat-pill');
-  if(!pill){
-    pill = document.createElement('div');
-    pill.id = 'bat-pill';
-    pill.className = 'pill';
-    document.querySelector('.tbr').insertBefore(pill, document.getElementById('gps-global-pill'));
+
+  // Tampilkan pill baterai device ini sendiri (hanya untuk device yg punya enrolled asset)
+  const myIds = getOwnedAssetIds();
+  if(myIds.length > 0){
+    let pill = document.getElementById('bat-pill');
+    if(!pill){
+      pill = document.createElement('div');
+      pill.id = 'bat-pill';
+      pill.className = 'pill';
+      document.querySelector('.tbr').insertBefore(pill, document.getElementById('gps-global-pill'));
+    }
+    const dischargeMin = (!bat.charging && bat.dischargingTime !== Infinity)
+      ? ` · ${Math.floor(bat.dischargingTime/3600)}j${Math.floor((bat.dischargingTime%3600)/60)}m`
+      : '';
+    pill.innerHTML = `<span style="color:${col};font-weight:500">${icon} ${pct}%${bat.charging?' charging':''}${dischargeMin}</span>`;
   }
-  const dischargeMin = (!bat.charging && bat.dischargingTime !== Infinity)
-    ? ` · ${Math.floor(bat.dischargingTime/3600)}j${Math.floor((bat.dischargingTime%3600)/60)}m`
-    : '';
-  pill.innerHTML = `<span style="color:${col};font-weight:500">${icon} ${pct}%${bat.charging?' charging':''}${dischargeMin}</span>`;
 
-  // Update local asset state
-  assets.forEach(a => {
-    if(a.swStatus === 'online'){
-      a.deviceBatPct     = pct;
-      a.deviceBatCharging = bat.charging;
-    }
-  });
-
-  // ── PUSH ke Supabase agar dashboard lain bisa baca realtime ──
-  // Push ke semua asset yg sw_status=online milik device ini
-  assets.forEach(async a => {
-    if(a.swStatus === 'online' && a.fromCloud){
-      try {
-        await _supabase.from('assets').update({
-          sw_battery: pct,
-          sw_bat_charging: bat.charging
-        }).eq('id', a.id);
-      } catch(e){ /* silent */ }
-    }
+  // ── Push ke Supabase HANYA untuk asset milik device ini ──
+  // Tidak menyentuh asset orang lain sama sekali
+  myIds.forEach(async id => {
+    const a = assets.find(x => x.id === id);
+    if(!a || !a.fromCloud) return;
+    try {
+      await _supabase.from('assets').update({
+        sw_battery:     pct,
+        sw_bat_charging: bat.charging
+      }).eq('id', id);
+      // Update local state juga agar UI konsisten
+      a.swBat         = pct;
+      a.swBatCharging = bat.charging;
+    } catch(e){ /* silent */ }
   });
 }
 initBattery();
