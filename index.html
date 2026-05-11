@@ -548,7 +548,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--tx1);font-
       </div>
       <div class="lbl" style="margin-top:6px">Heartbeat timeout SW</div>
       <div style="display:flex;align-items:center;gap:7px">
-        <input type="range" min="5" max="60" step="5" value="15" id="hb-slider" style="flex:1" oninput="HB_TO=+this.value;document.getElementById('hb-val').textContent=this.value+'s'">
+        <input type="range" min="5" max="60" step="5" value="30" id="hb-slider" style="flex:1" oninput="HB_TO=+this.value;document.getElementById('hb-val').textContent=this.value+'s'">
         <span style="font-size:11px;color:var(--blu);font-weight:500;min-width:28px" id="hb-val">15s</span>
       </div>
       <div id="del-box" class="del-box">
@@ -644,7 +644,7 @@ const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 /* ═══════════════════════════════════════════
    STATE
    ═══════════════════════════════════════════ */
-let isDark = true, HB_TO = 15;
+let isDark = true, HB_TO = 30;
 let leafMap1 = null, mapMarkers1 = [];
 let clientMap = null, clientSW = null, clientHW = null, clientGeo = null;
 let evLog = [];
@@ -722,6 +722,10 @@ async function loadFromSupabase(){
         // Update SW position dari cloud
         existing.swLat = swLat;
         existing.swLng = swLng;
+        // Sync battery dari Supabase kalau ada
+        if(row.battery !== null && row.battery !== undefined){
+          existing.hwBat = parseFloat(row.battery) || 0;
+        }
         // Hanya update lastSeen kalau data Supabase lebih baru
         if(lastSeen > existing.swLastSeen) {
           existing.swLastSeen = lastSeen;
@@ -751,7 +755,7 @@ async function loadFromSupabase(){
           swLastSeen: lastSeen,
           swHb: Array(8).fill(1),
           hwLat: swLat, hwLng: swLng,
-          hwStatus: 'online', hwLastSeen: now, hwBat: 85,
+          hwStatus: 'online', hwLastSeen: now, hwBat: parseFloat(row.battery) || 85,
           cloudLastSeen: row.last_seen || '—',
           fromCloud: true
         });
