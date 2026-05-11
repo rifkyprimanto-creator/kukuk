@@ -722,10 +722,22 @@ async function loadFromSupabase(){
         // Update SW position dari cloud
         existing.swLat = swLat;
         existing.swLng = swLng;
-        existing.swLastSeen = lastSeen;
-        existing.swStatus = row.sw_status || 'online';
+        // Hanya update lastSeen kalau data Supabase lebih baru
+        if(lastSeen > existing.swLastSeen) {
+          existing.swLastSeen = lastSeen;
+        }
+        // Cek apakah last_seen dari DB sudah timeout
+        const age = (Date.now() - existing.swLastSeen) / 1000;
+        const isAlive = age <= HB_TO;
+        existing.swStatus = isAlive ? (row.sw_status || 'online') : 'offline';
         existing.cloudLastSeen = row.last_seen || '—';
-        existing.swHb = [...existing.swHb.slice(1), 1];
+        existing.swHb = [...existing.swHb.slice(1), isAlive ? 1 : 0];
+        // Trigger alert kalau baru saja offline
+        if(!isAlive && existing._wasOnline){
+          pushLog('theft', `${existing.id} — SW offline (no update ${Math.round(age)}s)`, `Last seen: ${existing.cloudLastSeen}`);
+          playBeep();
+        }
+        existing._wasOnline = isAlive;
       } else {
         // Asset baru dari cloud — tambah ke local
         assets.push({
@@ -1203,12 +1215,24 @@ let audioCtx=null;
 function playBeep(){try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type='square';o.frequency.value=880;g.gain.setValueAtTime(0.07,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.3);o.start();o.stop(audioCtx.currentTime+0.3);}catch(e){}}
 
 /* ═══════════════════════════════════════════
-   HEARTBEAT TICK — update HW bat lokal tiap 3s
+   HEARTBEAT TICK — cek timeout SW tiap 3s
    ═══════════════════════════════════════════ */
 setInterval(()=>{
+  let alertFired = false;
   assets.forEach(a=>{
-    if(a.swStatus==='online'){ a.swLastSeen=Date.now(); a.swHb=[...a.swHb.slice(1),1]; }
-    if(a.hwStatus==='online'){ a.hwLastSeen=Date.now(); a.hwBat=Math.max(0,a.hwBat-0.008); }
+    const age = (Date.now() - a.swLastSeen) / 1000;
+    // Jangan reset swLastSeen di sini — biarkan age naik alami
+    // SW dianggap offline kalau sudah >HB_TO detik tidak ada update dari Supabase
+    if(a.swStatus === 'online' && age > HB_TO){
+      a.swStatus = 'offline';
+      pushLog('theft', `${a.id} — SW timeout (${Math.round(age)}s)`, `Last seen: ${a.cloudLastSeen || '—'}`);
+      playBeep();
+      alertFired = true;
+    }
+    // HW bat drain simulasi
+    if(a.hwStatus==='online'){ a.hwBat=Math.max(0,a.hwBat-0.008); }
+    // HB tick — 1 kalau masih online, 0 kalau sudah timeout
+    a.swHb = [...a.swHb.slice(1), a.swStatus==='online' ? 1 : 0];
   });
   renderAll();
 }, 3000);
@@ -1237,16 +1261,21 @@ async function initBattery(){
   try {
     const bat = await navigator.getBattery();
     deviceBattery = bat;
-    updateBatteryUI(bat);
-    bat.addEventListener('levelchange',  () => updateBatteryUI(bat));
-    bat.addEventListener('chargingchange',() => updateBatteryUI(bat));
+    updateBatteryUI();
+    bat.addEventListener('levelchange',   updateBatteryUI);
+    bat.addEventListener('chargingchange',updateBatteryUI);
+    bat.addEventListener('dischargingtimechange', updateBatteryUI);
+    // Poll tiap 10 detik untuk pastikan selalu sinkron
+    setInterval(updateBatteryUI, 10000);
   } catch(e) { console.warn('Battery API error:', e); }
 }
-function updateBatteryUI(bat){
+function updateBatteryUI(){
+  const bat = deviceBattery;
+  if(!bat) return;
+  // Selalu baca langsung dari object battery — tidak pakai nilai cache
   const pct  = Math.round(bat.level * 100);
   const icon = bat.charging ? '⚡' : pct > 50 ? '🔋' : pct > 20 ? '🪫' : '❗';
   const col  = bat.charging ? 'var(--blu)' : pct > 50 ? 'var(--grn)' : pct > 20 ? 'var(--amb)' : 'var(--red)';
-  // Tampilkan di topbar
   let pill = document.getElementById('bat-pill');
   if(!pill){
     pill = document.createElement('div');
@@ -1254,11 +1283,13 @@ function updateBatteryUI(bat){
     pill.className = 'pill';
     document.querySelector('.tbr').insertBefore(pill, document.getElementById('gps-global-pill'));
   }
-  pill.innerHTML = `<span style="color:${col};font-weight:500">${icon} ${pct}%${bat.charging?' charging':''}</span>`;
-  // Update semua asset yang aktif — sync baterai SW device ke hwBat simulasi
+  const dischargeMin = (!bat.charging && bat.dischargingTime !== Infinity)
+    ? ` · ${Math.floor(bat.dischargingTime/3600)}j${Math.floor((bat.dischargingTime%3600)/60)}m`
+    : '';
+  pill.innerHTML = `<span style="color:${col};font-weight:500">${icon} ${pct}%${bat.charging?' charging':''}${dischargeMin}</span>`;
   assets.forEach(a => {
-    if(a.swStatus === 'online') {
-      a.deviceBatPct = pct;
+    if(a.swStatus === 'online'){
+      a.deviceBatPct     = pct;
       a.deviceBatCharging = bat.charging;
     }
   });
