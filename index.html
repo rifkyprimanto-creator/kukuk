@@ -373,6 +373,14 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--tx1);font-
 <!-- ══ DASHBOARD ══ -->
 <div class="view on" id="view-dash">
   <div id="main-ban" class="banner hidden"></div>
+  <div class="banner ban-warn" id="sql-notice" style="margin-bottom:9px">
+    <div class="ban-ic bic-w"><i class="ti ti-database" style="font-size:13px"></i></div>
+    <div>
+      <div class="ban-ttl">Setup Supabase — tambah 2 kolom untuk baterai realtime</div>
+      <div class="ban-sub">Jalankan di Supabase SQL Editor: <code style="background:rgba(0,0,0,.2);padding:1px 5px;border-radius:3px;font-size:9px">ALTER TABLE assets ADD COLUMN IF NOT EXISTS sw_battery int; ADD COLUMN IF NOT EXISTS sw_bat_charging bool;</code>
+      <button onclick="document.getElementById('sql-notice').style.display='none'" style="margin-left:8px;background:none;border:none;cursor:pointer;color:var(--amb-tx);font-size:10px;font-weight:500">Tutup ✕</button></div>
+    </div>
+  </div>
   <div class="g5">
     <div class="mc"><div class="mc-l">Total assets</div><div class="mc-v vb" id="m-tot">0</div></div>
     <div class="mc"><div class="mc-l">SW + HW online</div><div class="mc-v vg" id="m-full">0</div></div>
@@ -393,7 +401,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--tx1);font-
         <th style="width:75px">Threat</th>
         <th class="col-swloc" style="width:100px">SW location</th>
         <th class="col-hwloc" style="width:100px">HW location</th>
-        <th class="col-dev" style="width:60px">HW bat</th>
+        <th class="col-dev" style="width:70px">SW/HW bat</th>
         <th style="width:65px">Deviasi</th>
         <th style="width:115px">Aksi</th>
       </tr></thead>
@@ -548,8 +556,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--tx1);font-
       </div>
       <div class="lbl" style="margin-top:6px">Heartbeat timeout SW</div>
       <div style="display:flex;align-items:center;gap:7px">
-        <input type="range" min="5" max="60" step="5" value="30" id="hb-slider" style="flex:1" oninput="HB_TO=+this.value;document.getElementById('hb-val').textContent=this.value+'s'">
-        <span style="font-size:11px;color:var(--blu);font-weight:500;min-width:28px" id="hb-val">15s</span>
+        <input type="range" min="5" max="180" step="5" value="90" id="hb-slider" style="flex:1" oninput="HB_TO=+this.value;document.getElementById('hb-val').textContent=this.value+'s'">
+        <span style="font-size:11px;color:var(--blu);font-weight:500;min-width:28px" id="hb-val">90s</span>
       </div>
       <div id="del-box" class="del-box">
         <div style="font-size:11px;color:var(--red-tx);margin-bottom:6px">Hapus asset dari sistem?</div>
@@ -644,7 +652,7 @@ const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 /* ═══════════════════════════════════════════
    STATE
    ═══════════════════════════════════════════ */
-let isDark = true, HB_TO = 30;
+let isDark = true, HB_TO = 90; // 90s — toleransi iPhone Safari background throttle
 let leafMap1 = null, mapMarkers1 = [];
 let clientMap = null, clientSW = null, clientHW = null, clientGeo = null;
 let evLog = [];
@@ -667,7 +675,12 @@ const fmT = () => new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'
 
 function swSt(a){
   const age = (Date.now()-a.swLastSeen)/1000;
-  if(a.swStatus==='offline'||age>HB_TO) return 'offline';
+  // Kalau Supabase bilang offline → percaya langsung
+  if(a.cloudSwStatus==='offline') return 'offline';
+  // Kalau sudah melewati HB_TO tanpa update dari Supabase → offline
+  if(age > HB_TO) return 'offline';
+  // Kalau sw_status lokal di-set offline (misal via swKill) → offline
+  if(a.swStatus==='offline') return 'offline';
   if(HAV(a.regLat,a.regLng,a.swLat,a.swLng)>100) return 'oob';
   return 'online';
 }
@@ -700,6 +713,24 @@ function startGpsTracking(){
     document.getElementById('enr-gps-lat').textContent = currentPos.lat.toFixed(6);
     document.getElementById('enr-gps-lng').textContent = currentPos.lng.toFixed(6);
     document.getElementById('enr-gps-acc').textContent = '±'+currentPos.acc+'m';
+
+    // ── Push posisi + status online ke Supabase untuk semua asset yg sw online ──
+    assets.forEach(async a => {
+      if(a.swStatus === 'online' && a.fromCloud){
+        const batPct = deviceBattery ? Math.round(deviceBattery.level*100) : null;
+        const batChg = deviceBattery ? deviceBattery.charging : null;
+        const payload = {
+          sw_lat: currentPos.lat,
+          sw_lng: currentPos.lng,
+          sw_status: 'online',
+          last_seen: new Date().toISOString()
+        };
+        if(batPct !== null){ payload.sw_battery = batPct; payload.sw_bat_charging = batChg; }
+        try {
+          await _supabase.from('assets').update(payload).eq('id', a.id);
+        } catch(e){ /* silent */ }
+      }
+    });
   }, err => {
     document.getElementById('gps-global-txt').textContent = 'Error: '+err.message;
   }, { enableHighAccuracy: true, maximumAge: 5000 });
@@ -722,7 +753,12 @@ async function loadFromSupabase(){
         // Update SW position dari cloud
         existing.swLat = swLat;
         existing.swLng = swLng;
-        // Sync battery dari Supabase kalau ada
+        // Sync battery SW dari Supabase (dikirim oleh client.html / device target)
+        if(row.sw_battery !== null && row.sw_battery !== undefined){
+          existing.swBat = parseFloat(row.sw_battery);
+          existing.swBatCharging = !!row.sw_bat_charging;
+        }
+        // Sync battery HW dari Supabase kalau ada
         if(row.battery !== null && row.battery !== undefined){
           existing.hwBat = parseFloat(row.battery) || 0;
         }
@@ -730,10 +766,12 @@ async function loadFromSupabase(){
         if(lastSeen > existing.swLastSeen) {
           existing.swLastSeen = lastSeen;
         }
+        // Simpan sw_status dari cloud — digunakan swSt() untuk override timeout lokal
+        existing.cloudSwStatus = row.sw_status || 'online';
         // Cek apakah last_seen dari DB sudah timeout
         const age = (Date.now() - existing.swLastSeen) / 1000;
-        const isAlive = age <= HB_TO;
-        existing.swStatus = isAlive ? (row.sw_status || 'online') : 'offline';
+        const isAlive = (existing.cloudSwStatus !== 'offline') && (age <= HB_TO);
+        existing.swStatus = isAlive ? 'online' : 'offline';
         existing.cloudLastSeen = row.last_seen || '—';
         existing.swHb = [...existing.swHb.slice(1), isAlive ? 1 : 0];
         // Trigger alert kalau baru saja offline
@@ -903,6 +941,12 @@ function renderMobileCards(){
     const sw=swSt(a),hw=hwSt(a),thr=threat(a);
     const hwD=HAV(a.regLat,a.regLng,a.hwLat,a.hwLng);
     const bc=a.hwBat>50?'var(--grn)':a.hwBat>20?'var(--amb)':'var(--red)';
+    const swBatPct2 = (a.swBat !== undefined && a.swBat !== null) ? Math.round(a.swBat) : null;
+    const swBatIco2 = a.swBatCharging ? '⚡' : swBatPct2 > 50 ? '🔋' : swBatPct2 > 20 ? '🪫' : '❗';
+    const swBatC2   = a.swBatCharging ? 'var(--blu)' : swBatPct2 > 50 ? 'var(--grn)' : swBatPct2 > 20 ? 'var(--amb)' : 'var(--red)';
+    const swBatBadge= swBatPct2 !== null
+      ? `<span style="font-size:9px;padding:2px 6px;border-radius:4px;background:var(--bg2);color:${swBatC2};font-weight:500">${swBatIco2} SW ${swBatPct2}%</span>`
+      : '';
     const bgRow=thr==='theft'||thr==='lost'?'background:var(--red-bg);border-color:var(--red)':thr==='oob'?'background:var(--amb-bg);border-color:var(--amb)':'';
     const swb=sw==='online'?'<span class="bdg b-on">SW Online</span>':sw==='oob'?'<span class="bdg b-oob">SW OOB</span>':'<span class="bdg b-off">SW Offline</span>';
     const hwb=hw==='online'?'<span class="bdg b-hw">HW Active</span>':'<span class="bdg b-off">HW Off</span>';
@@ -917,7 +961,8 @@ function renderMobileCards(){
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
         ${swb} ${hwb}
-        <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:var(--bg2);color:${bc};font-weight:500">${hw==='online'?'🔋 '+Math.round(a.hwBat)+'%':'🔋 —'}</span>
+        ${swBatBadge}
+        <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:var(--bg2);color:${bc};font-weight:500">${hw==='online'?'🔧 HW '+Math.round(a.hwBat)+'%':'🔧 HW —'}</span>
         <span style="font-size:9px;padding:2px 6px;border-radius:4px;background:var(--bg2);color:${hwD>100?'var(--red)':'var(--grn)'};font-weight:500">📍 ${fmD(hwD)}</span>
       </div>
       <div style="font-size:10px;font-family:monospace;color:var(--tx3);background:var(--bg2);padding:6px 8px;border-radius:6px;margin-bottom:8px">
@@ -945,13 +990,25 @@ function renderTable(){
     const hwb = hw==='online'?'<span class="bdg b-hw"><i class="ti ti-cpu" style="font-size:8px"></i>Active</span>':'<span class="bdg b-off">Offline</span>';
     const thrb= thr==='safe'?'<span class="bdg b-tel">Safe</span>':thr==='theft'?'<span class="bdg b-off">Theft</span>':thr==='lost'?'<span class="bdg b-off">Lost</span>':'<span class="bdg b-oob">OOB</span>';
     const bc  = a.hwBat>50?'var(--grn)':a.hwBat>20?'var(--amb)':'var(--red)';
+    const swBatPct = (a.swBat !== undefined && a.swBat !== null) ? Math.round(a.swBat) : null;
+    const swBatIcon = a.swBatCharging ? '⚡' : swBatPct > 50 ? '🔋' : swBatPct > 20 ? '🪫' : '❗';
+    const swBatCol = a.swBatCharging ? 'var(--blu)' : swBatPct > 50 ? 'var(--grn)' : swBatPct > 20 ? 'var(--amb)' : 'var(--red)';
+    const swBatHtml = swBatPct !== null
+      ? `<span style="color:${swBatCol};font-weight:500;font-size:9px">${swBatIcon}${swBatPct}%</span>`
+      : `<span style="color:var(--tx3);font-size:9px">—</span>`;
     const liveTag = a.fromCloud ? '<span class="bdg b-tel" style="margin-left:2px">☁️</span>' : '';
     return `<tr class="${rc}">
       <td><span class="mono" style="color:var(--blu);font-size:10px;font-weight:500">${a.id}</span>${liveTag}<br><span style="font-size:9px;color:var(--tx3)">${a.name}</span></td>
       <td>${swb}</td><td>${hwb}</td><td>${thrb}</td>
       <td class="col-swloc" style="font-size:9px;font-family:monospace;color:var(--tx3)">${fmC(a.swLat)}<br>${fmC(a.swLng)}</td>
       <td class="col-hwloc" style="font-size:9px;font-family:monospace;color:${hw==='online'?'var(--pur-tx)':'var(--tx3)'}">${fmC(a.hwLat)}<br>${fmC(a.hwLng)}</td>
-      <td class="col-dev"><span style="color:${bc};font-weight:500;font-size:10px">${hw==='online'?Math.round(a.hwBat)+'%':'—'}</span><div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:2px;overflow:hidden"><div style="height:100%;width:${hw==='online'?Math.round(a.hwBat):0}%;background:${bc};transition:width .5s"></div></div></td>
+      <td class="col-dev">
+        <div style="font-size:9px;color:var(--tx3);margin-bottom:1px">SW bat:</div>
+        ${swBatHtml}
+        <div style="font-size:9px;color:var(--tx3);margin-top:3px;margin-bottom:1px">HW bat:</div>
+        <span style="color:${bc};font-weight:500;font-size:10px">${hw==='online'?Math.round(a.hwBat)+'%':'—'}</span>
+        <div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:2px;overflow:hidden"><div style="height:100%;width:${hw==='online'?Math.round(a.hwBat):0}%;background:${bc};transition:width .5s"></div></div>
+      </td>
       <td><span style="color:${hwD>100?'var(--red)':'var(--grn)'};font-weight:500">${fmD(hwD)}</span></td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap">
         <button class="btn bd" style="padding:5px 7px;font-size:10px" onclick="swKill('${a.id}')" title="Matikan SW"><i class="ti ti-power"></i><span class="btn-lbl"> Off</span></button>
@@ -1291,10 +1348,25 @@ function updateBatteryUI(){
     ? ` · ${Math.floor(bat.dischargingTime/3600)}j${Math.floor((bat.dischargingTime%3600)/60)}m`
     : '';
   pill.innerHTML = `<span style="color:${col};font-weight:500">${icon} ${pct}%${bat.charging?' charging':''}${dischargeMin}</span>`;
+
+  // Update local asset state
   assets.forEach(a => {
     if(a.swStatus === 'online'){
       a.deviceBatPct     = pct;
       a.deviceBatCharging = bat.charging;
+    }
+  });
+
+  // ── PUSH ke Supabase agar dashboard lain bisa baca realtime ──
+  // Push ke semua asset yg sw_status=online milik device ini
+  assets.forEach(async a => {
+    if(a.swStatus === 'online' && a.fromCloud){
+      try {
+        await _supabase.from('assets').update({
+          sw_battery: pct,
+          sw_bat_charging: bat.charging
+        }).eq('id', a.id);
+      } catch(e){ /* silent */ }
     }
   });
 }
