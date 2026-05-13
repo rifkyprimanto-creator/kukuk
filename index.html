@@ -493,11 +493,16 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--tx1);font-
       <div class="lbl" style="text-align:center">Heartbeat</div>
       <div class="hbticks" id="c-ticks"></div>
       <div class="hbbar"><div class="hbfill" id="c-hbf" style="width:100%;background:var(--grn)"></div></div>
+      <!-- Battery row — client view -->
+      <div id="c-bat-row" style="display:flex;gap:7px;margin-bottom:9px;flex-wrap:wrap"></div>
+
       <div class="coordbox">
         <div class="clbl">Registered home</div><div id="c-reg">—</div>
         <div class="clbl" style="margin-top:4px">SW location (live GPS)</div><div id="c-sw">—</div>
         <div class="clbl" style="margin-top:4px">HW tracker location</div><div id="c-hw" style="color:var(--pur-tx)">—</div>
         <div class="clbl" style="margin-top:4px">Deviasi dari home</div><div id="c-dist" style="font-weight:500">—</div>
+        <div class="clbl" style="margin-top:4px">SW battery</div><div id="c-swbat" style="font-weight:500">—</div>
+        <div class="clbl" style="margin-top:4px">HW tracker battery</div><div id="c-hwbat" style="font-weight:500">—</div>
         <div class="clbl" style="margin-top:4px">Last seen (Supabase)</div><div id="c-lastseen" style="color:var(--tx3)">—</div>
       </div>
       <div class="lbl">Live map</div>
@@ -514,6 +519,16 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--tx1);font-
       <div class="gps-live-label">📡 GPS Device Saat Ini (Browser Geolocation)</div>
       <span id="enr-gps-lat">0.000000</span>, <span id="enr-gps-lng">0.000000</span>
       <span style="margin-left:8px;font-size:9px;color:var(--tx3)" id="enr-gps-acc"></span>
+    </div>
+
+    <!-- SW Battery live preview -->
+    <div id="enr-bat-box" style="display:flex;align-items:center;gap:8px;background:var(--bg2);border:0.5px solid var(--br);border-radius:7px;padding:8px 10px;margin-bottom:8px;font-size:11px">
+      <span id="enr-bat-icon" style="font-size:16px">🔋</span>
+      <div>
+        <div style="font-size:9px;color:var(--tx3);margin-bottom:2px">Device Battery (SW Layer)</div>
+        <span id="enr-bat-val" style="font-weight:500;color:var(--grn)">Mendeteksi baterai...</span>
+        <span id="enr-bat-charge" style="font-size:9px;color:var(--blu);margin-left:5px"></span>
+      </div>
     </div>
     <div class="enroll-step">
       <div class="snum">1</div>
@@ -1087,18 +1102,31 @@ function renderEnrolled(){
   const el = document.getElementById('enr-list');
   document.getElementById('e-cnt').textContent = assets.length+' devices';
   if(!assets.length){ el.innerHTML='<div class="empty">Belum ada device</div>'; return; }
-  el.innerHTML = assets.map(a=>`<div class="enr-item fi">
-    <div>
-      <div class="ei-id">${a.id} ${a.fromCloud?'<span style="font-size:8px;color:var(--grn-tx)">☁️ cloud</span>':''}</div>
-      <div class="ei-info">${a.name} · ${a.coord} · ${a.hwModel}</div>
-      <div class="ei-info">${fmC(a.regLat)}, ${fmC(a.regLng)}</div>
-      ${a.cloudLastSeen ? `<div class="ei-info">Last seen: ${a.cloudLastSeen}</div>` : ''}
-    </div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-      <span class="bdg b-blu">Enrolled</span>
-      <button class="btn bd" style="padding:2px 7px;font-size:9px" onclick="quickDel('${a.id}')"><i class="ti ti-trash"></i> Hapus</button>
-    </div>
-  </div>`).join('');
+  el.innerHTML = assets.map(a=>{
+    const swBatPct = (a.swBat !== undefined && a.swBat !== null) ? Math.round(a.swBat) : null;
+    const swBatIco = a.swBatCharging ? '⚡' : swBatPct > 50 ? '🔋' : swBatPct > 20 ? '🪫' : '❗';
+    const swBatC   = a.swBatCharging ? 'var(--blu)' : swBatPct > 50 ? 'var(--grn)' : swBatPct > 20 ? 'var(--amb)' : 'var(--red)';
+    const hwBatC   = a.hwBat > 50 ? 'var(--grn)' : a.hwBat > 20 ? 'var(--amb)' : 'var(--red)';
+    return `<div class="enr-item fi">
+      <div>
+        <div class="ei-id">${a.id} ${a.fromCloud?'<span style="font-size:8px;color:var(--grn-tx)">☁️ cloud</span>':''}</div>
+        <div class="ei-info">${a.name} · ${a.coord} · ${a.hwModel}</div>
+        <div class="ei-info">${fmC(a.regLat)}, ${fmC(a.regLng)}</div>
+        <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap">
+          ${swBatPct !== null
+            ? `<span style="font-size:9px;padding:2px 7px;border-radius:4px;background:var(--bg3);color:${swBatC};font-weight:500">${swBatIco} SW ${swBatPct}%${a.swBatCharging?' charging':''}</span>`
+            : `<span style="font-size:9px;padding:2px 7px;border-radius:4px;background:var(--bg3);color:var(--tx3)">SW bat: —</span>`
+          }
+          <span style="font-size:9px;padding:2px 7px;border-radius:4px;background:var(--bg3);color:${hwBatC};font-weight:500">🔧 HW ${Math.round(a.hwBat)}%</span>
+        </div>
+        ${a.cloudLastSeen ? `<div class="ei-info" style="margin-top:3px">Last seen: ${a.cloudLastSeen}</div>` : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span class="bdg b-blu">Enrolled</span>
+        <button class="btn bd" style="padding:2px 7px;font-size:9px" onclick="quickDel('${a.id}')"><i class="ti ti-trash"></i> Hapus</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function renderTimeline(){
@@ -1182,6 +1210,45 @@ function renderClient(){
   de.textContent = fmD(dist);
   de.style.color = dist>100?'var(--red)':dist>50?'var(--amb)':'var(--grn)';
   document.getElementById('c-lastseen').textContent = a.cloudLastSeen || 'lokal';
+
+  // ── SW Battery ──────────────────────────────────────────
+  const swBatEl = document.getElementById('c-swbat');
+  const swBatPct = (a.swBat !== undefined && a.swBat !== null) ? Math.round(a.swBat) : null;
+  if(swBatPct !== null){
+    const swBatIco = a.swBatCharging ? '⚡' : swBatPct>50 ? '🔋' : swBatPct>20 ? '🪫' : '❗';
+    const swBatC   = a.swBatCharging ? 'var(--blu)' : swBatPct>50 ? 'var(--grn)' : swBatPct>20 ? 'var(--amb)' : 'var(--red)';
+    swBatEl.textContent = `${swBatIco} ${swBatPct}%${a.swBatCharging?' (charging)':''}`;
+    swBatEl.style.color = swBatC;
+  } else {
+    swBatEl.textContent = 'Tidak tersedia (Battery API tidak didukung browser ini)';
+    swBatEl.style.color = 'var(--tx3)';
+  }
+
+  // ── HW Battery ──────────────────────────────────────────
+  const hwBatEl = document.getElementById('c-hwbat');
+  if(hw === 'online'){
+    const hwPct = Math.round(a.hwBat);
+    const hwC   = hwPct>50 ? 'var(--grn)' : hwPct>20 ? 'var(--amb)' : 'var(--red)';
+    hwBatEl.textContent = `🔧 ${hwPct}% — ${a.hwModel||'Hardware tracker'}`;
+    hwBatEl.style.color = hwC;
+  } else {
+    hwBatEl.textContent = 'HW tracker offline';
+    hwBatEl.style.color = 'var(--tx3)';
+  }
+
+  // ── Battery pills row ────────────────────────────────────
+  const batRow = document.getElementById('c-bat-row');
+  const pillSW = swBatPct !== null
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:3px 9px;border-radius:20px;background:var(--${a.swBatCharging?'blu':swBatPct>50?'grn':swBatPct>20?'amb':'red'}-bg);color:var(--${a.swBatCharging?'blu':swBatPct>50?'grn':swBatPct>20?'amb':'red'}-tx);border:0.5px solid var(--${a.swBatCharging?'blu':swBatPct>50?'grn':swBatPct>20?'amb':'red'})">
+        ${a.swBatCharging?'⚡':swBatPct>50?'🔋':swBatPct>20?'🪫':'❗'} SW ${swBatPct}%
+      </span>` : '';
+  const hwPct2  = Math.round(a.hwBat);
+  const hwBatCls = hwPct2>50?'grn':hwPct2>20?'amb':'red';
+  const pillHW  = hw==='online'
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:3px 9px;border-radius:20px;background:var(--${hwBatCls}-bg);color:var(--${hwBatCls}-tx);border:0.5px solid var(--${hwBatCls})">🔧 HW ${hwPct2}%</span>`
+    : `<span style="font-size:10px;padding:3px 9px;border-radius:20px;background:var(--red-bg);color:var(--red-tx);border:0.5px solid var(--red)">HW offline</span>`;
+  batRow.innerHTML = (pillSW || '<span style="font-size:10px;color:var(--tx3);padding:3px 9px">SW battery: not available</span>') + pillHW;
+
   updateClientMap(a,thr);
 }
 
@@ -1393,7 +1460,14 @@ const ownedIds = getOwnedAssetIds(); // snapshot saat load
 async function initBattery(){
   // Kalau device ini tidak punya asset yang di-enroll → skip sama sekali
   // Battery pill tetap ditampilkan untuk info device sendiri, tapi TIDAK push ke Supabase
-  if(!('getBattery' in navigator)) return;
+  if(!('getBattery' in navigator)){
+    // Battery API tidak tersedia (iOS Safari, Firefox) — tampilkan pesan di enrollment
+    const enrVal = document.getElementById('enr-bat-val');
+    const enrIcon = document.getElementById('enr-bat-icon');
+    if(enrVal){ enrVal.textContent = 'Tidak tersedia di browser ini (iOS/Firefox tidak support Battery API)'; enrVal.style.color='var(--tx3)'; }
+    if(enrIcon){ enrIcon.textContent = 'ℹ️'; }
+    return;
+  }
   try {
     const bat = await navigator.getBattery();
     deviceBattery = bat;
@@ -1402,7 +1476,11 @@ async function initBattery(){
     bat.addEventListener('chargingchange', updateBatteryUI);
     bat.addEventListener('dischargingtimechange', updateBatteryUI);
     setInterval(updateBatteryUI, 15000);
-  } catch(e){ console.warn('Battery API:', e); }
+  } catch(e){
+    console.warn('Battery API:', e);
+    const enrVal = document.getElementById('enr-bat-val');
+    if(enrVal){ enrVal.textContent = 'Battery API error — tidak dapat membaca baterai'; enrVal.style.color='var(--red)'; }
+  }
 }
 
 function updateBatteryUI(){
@@ -1411,6 +1489,22 @@ function updateBatteryUI(){
   const pct  = Math.round(bat.level * 100);
   const icon = bat.charging ? '⚡' : pct > 50 ? '🔋' : pct > 20 ? '🪫' : '❗';
   const col  = bat.charging ? 'var(--blu)' : pct > 50 ? 'var(--grn)' : pct > 20 ? 'var(--amb)' : 'var(--red)';
+
+  // ── Update enrollment battery preview box ───────────────
+  const enrBatVal  = document.getElementById('enr-bat-val');
+  const enrBatIcon = document.getElementById('enr-bat-icon');
+  const enrBatChg  = document.getElementById('enr-bat-charge');
+  if(enrBatVal){
+    enrBatVal.textContent = `${pct}%${bat.charging?' (charging)':''}`;
+    enrBatVal.style.color = col;
+    enrBatIcon.textContent = icon;
+    enrBatChg.textContent = bat.charging ? '⚡ Sedang charging' : '';
+    // Juga update HB_TO bar visual di box
+    const enrBox = document.getElementById('enr-bat-box');
+    if(enrBox) enrBox.style.borderColor = pct > 50 ? 'var(--grn)' : pct > 20 ? 'var(--amb)' : 'var(--red)';
+  }
+  // ── Jika Battery API tidak tersedia, tampilkan pesan ────
+  // (ditangani oleh initBattery fallback di bawah)
 
   // Tampilkan pill baterai device ini sendiri (hanya untuk device yg punya enrolled asset)
   const myIds = getOwnedAssetIds();
